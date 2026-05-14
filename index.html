@@ -1176,10 +1176,51 @@
             <!-- Reports Section -->
             <section id="reports" class="section">
                 <div class="page-header">
-                    <h1><i class="fas fa-chart-bar"></i> التقارير</h1>
+                    <h1><i class="fas fa-chart-bar"></i> التقارير المتقدمة</h1>
                     <div class="header-actions">
                         <button class="btn btn-secondary btn-small" onclick="exportTable('reports')">
                             <i class="fas fa-download"></i> تصدير
+                        </button>
+                        <button class="btn btn-secondary btn-small" onclick="printReports()">
+                            <i class="fas fa-print"></i> طباعة
+                        </button>
+                    </div>
+                </div>
+
+                <div class="filters" style="flex-wrap: wrap;">
+                    <div class="filter-group">
+                        <label>نوع التقرير:</label>
+                        <select id="reportType" onchange="loadReports()">
+                            <option value="summary">ملخص العميل × الخصم</option>
+                            <option value="invoices">تفاصيل الفواتير</option>
+                            <option value="settlements">المخالصات</option>
+                            <option value="transactions">العمليات المالية</option>
+                            <option value="all">كل بيانات العميل</option>
+                        </select>
+                    </div>
+                    <div class="filter-group admin-only">
+                        <label>العميل:</label>
+                        <select id="reportClientFilter" onchange="loadReports()">
+                            <option value="">— الكل —</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>الخصم:</label>
+                        <select id="reportCounterpartyFilter" onchange="loadReports()">
+                            <option value="">— الكل —</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>من تاريخ:</label>
+                        <input type="date" id="reportDateFrom" onchange="loadReports()">
+                    </div>
+                    <div class="filter-group">
+                        <label>إلى تاريخ:</label>
+                        <input type="date" id="reportDateTo" onchange="loadReports()">
+                    </div>
+                    <div class="filter-group" style="align-self: flex-end;">
+                        <button class="btn btn-secondary btn-small" onclick="resetReportFilters()">
+                            <i class="fas fa-times"></i> إعادة تعيين
                         </button>
                     </div>
                 </div>
@@ -1190,7 +1231,7 @@
                         <div class="stat-value" id="totalClients">0</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-label">عدد الفواتير</div>
+                        <div class="stat-label">عدد السجلات</div>
                         <div class="stat-value" id="totalInvoices">0</div>
                     </div>
                     <div class="stat-card">
@@ -1207,38 +1248,24 @@
                     </div>
                 </div>
 
-                <div class="filters">
-                    <div class="filter-group">
-                        <label>تصفية حسب العميل:</label>
-                        <select id="reportClientFilter" onchange="loadReports()">
-                            <option value="">— الكل —</option>
-                        </select>
+                <div class="card" id="reportsChartContainer" style="display: none;">
+                    <div class="card-header">
+                        <h2>نظرة بيانية</h2>
                     </div>
-                    <div class="filter-group">
-                        <label>تصفية حسب الخصم:</label>
-                        <select id="reportCounterpartyFilter" onchange="loadReports()">
-                            <option value="">— الكل —</option>
-                        </select>
+                    <div style="height: 280px;">
+                        <canvas id="reportsChart"></canvas>
                     </div>
                 </div>
 
                 <div class="card">
                     <div class="card-header">
-                        <h2>كشف العميل × الخصم</h2>
+                        <h2 id="reportsTableTitle">تفاصيل التقرير</h2>
+                        <span style="font-size:12px;color:#888;" id="reportsCount"></span>
                     </div>
                     <div class="table-wrapper">
                         <table id="reportsTable">
-                            <thead>
-                                <tr>
-                                    <th>العميل</th>
-                                    <th>الخصم</th>
-                                    <th>عدد الفواتير</th>
-                                    <th>إجمالي المبلغ</th>
-                                    <th>إجمالي المدفوع</th>
-                                    <th>المتبقي</th>
-                                    <th>الصافي</th>
-                                    <th>الإجراءات</th>
-                                </tr>
+                            <thead id="reportsTableHead">
+                                <tr></tr>
                             </thead>
                             <tbody></tbody>
                         </table>
@@ -2853,12 +2880,94 @@
             }
         }
 
+        let reportsChart = null;
+
+        function populateReportDropdowns() {
+            const cf = document.getElementById('reportClientFilter');
+            const cpf = document.getElementById('reportCounterpartyFilter');
+            const fillSelect = (sel) => {
+                if (!sel) return;
+                const currentVal = sel.value;
+                sel.innerHTML = '<option value="">— الكل —</option>';
+                db.clients.forEach(c => {
+                    const o = document.createElement('option');
+                    o.value = c.id; o.textContent = c.name;
+                    sel.appendChild(o);
+                });
+                if (currentVal) sel.value = currentVal;
+            };
+            fillSelect(cf);
+            fillSelect(cpf);
+        }
+
+        function resetReportFilters() {
+            const ids = ['reportType', 'reportClientFilter', 'reportCounterpartyFilter', 'reportDateFrom', 'reportDateTo'];
+            ids.forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                if (el.tagName === 'SELECT') el.value = (id === 'reportType') ? 'summary' : '';
+                else el.value = '';
+            });
+            loadReports();
+        }
+
+        function printReports() {
+            const section = document.getElementById('reports');
+            if (!section) return;
+            const w = window.open('', '_blank');
+            const header = `<html dir="rtl"><head><meta charset="utf-8"><title>تقرير</title>
+                <style>
+                    body { font-family: Arial, sans-serif; padding: 20px; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+                    th, td { border: 1px solid #999; padding: 6px 8px; text-align: right; font-size: 12px; }
+                    th { background: #1a4d2e; color: white; }
+                    .stat-card { display: inline-block; margin: 5px; padding: 10px; border: 1px solid #ddd; }
+                    .filters { display: none; }
+                    button { display: none; }
+                </style></head><body>`;
+            w.document.write(header + section.innerHTML + '</body></html>');
+            w.document.close();
+            setTimeout(() => w.print(), 250);
+        }
+
         function loadReports() {
-            // Admin sees clients count; client doesn't
+            populateReportDropdowns();
+
+            const setText = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
             const elTC = document.getElementById('totalClients');
             if (elTC) elTC.textContent = db.clients.length;
 
-            const invoices = filterMine(db.invoices, ['clientId', 'counterpartyClientId']);
+            const type = document.getElementById('reportType')?.value || 'summary';
+            // For client role, force their own clientId
+            const filterClientId = isClient() ? currentUser.clientId : (document.getElementById('reportClientFilter')?.value || '');
+            const filterCounterId = document.getElementById('reportCounterpartyFilter')?.value || '';
+            const dateFrom = document.getElementById('reportDateFrom')?.value || '';
+            const dateTo = document.getElementById('reportDateTo')?.value || '';
+
+            const inRange = (date) => {
+                if (!dateFrom && !dateTo) return true;
+                if (!date) return false;
+                if (dateFrom && date < dateFrom) return false;
+                if (dateTo && date > dateTo) return false;
+                return true;
+            };
+
+            const matchInvoice = (item) => {
+                if (filterClientId && item.clientId !== filterClientId && item.counterpartyClientId !== filterClientId) return false;
+                if (filterCounterId && item.clientId !== filterCounterId && item.counterpartyClientId !== filterCounterId) return false;
+                return true;
+            };
+            const matchByClientOnly = (item) => {
+                if (filterClientId && item.clientId !== filterClientId) return false;
+                return true;
+            };
+
+            const invoices = filterMine(db.invoices, ['clientId', 'counterpartyClientId'])
+                .filter(i => matchInvoice(i) && inRange(i.date));
+            const settlements = filterMine(db.settlements)
+                .filter(s => matchByClientOnly(s) && inRange(s.date));
+            const transactions = filterMine(db.transactions)
+                .filter(t => matchByClientOnly(t) && inRange(t.date));
 
             // Summary totals
             let totalAmount = 0, totalPaid = 0;
@@ -2868,73 +2977,235 @@
             });
             const totalRemaining = totalAmount - totalPaid;
 
-            const setText = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
-            setText('totalInvoices', invoices.length);
+            // Stats based on report type
+            let recordsCount = invoices.length;
+            if (type === 'settlements') recordsCount = settlements.length;
+            else if (type === 'transactions') recordsCount = transactions.length;
+            else if (type === 'all') recordsCount = invoices.length + settlements.length + transactions.length;
+
+            setText('totalInvoices', recordsCount);
             setText('totalAmountSum', totalAmount.toFixed(2) + ' ر.س');
             setText('totalPaidSum', totalPaid.toFixed(2) + ' ر.س');
             setText('totalRemainingSum', totalRemaining.toFixed(2) + ' ر.س');
 
-            // Populate client filter dropdowns
-            const cf = document.getElementById('reportClientFilter');
-            const cpf = document.getElementById('reportCounterpartyFilter');
-            if (cf && cf.options.length <= 1) {
-                db.clients.forEach(c => {
-                    const o = document.createElement('option');
-                    o.value = c.id; o.textContent = c.name;
-                    cf.appendChild(o);
-                });
-            }
-            if (cpf && cpf.options.length <= 1) {
-                db.clients.forEach(c => {
-                    const o = document.createElement('option');
-                    o.value = c.id; o.textContent = c.name;
-                    cpf.appendChild(o);
-                });
-            }
-
-            const filterClientId = cf ? cf.value : '';
-            const filterCounterId = cpf ? cpf.value : '';
-
-            // Aggregate by (clientId, counterpartyClientId)
-            const groups = {};
-            invoices.forEach(inv => {
-                if (filterClientId && inv.clientId !== filterClientId && inv.counterpartyClientId !== filterClientId) return;
-                if (filterCounterId && inv.clientId !== filterCounterId && inv.counterpartyClientId !== filterCounterId) return;
-                const key = (inv.clientId || '') + '|' + (inv.counterpartyClientId || '');
-                if (!groups[key]) {
-                    groups[key] = { clientId: inv.clientId || '', counterpartyId: inv.counterpartyClientId || '', count: 0, amount: 0, paid: 0 };
-                }
-                groups[key].count += 1;
-                groups[key].amount += Number(inv.amount) || 0;
-                groups[key].paid += Number(inv.paid) || 0;
-            });
-
+            const titleEl = document.getElementById('reportsTableTitle');
+            const headEl = document.getElementById('reportsTableHead');
             const tbody = document.querySelector('#reportsTable tbody');
-            if (!tbody) return;
+            if (!tbody || !headEl || !titleEl) return;
             tbody.innerHTML = '';
-            Object.values(groups)
-                .sort((a, b) => (b.amount - b.paid) - (a.amount - a.paid))
-                .forEach(g => {
-                    const client = db.clients.find(c => c.id == g.clientId);
-                    const counter = db.clients.find(c => c.id == g.counterpartyId);
-                    const remaining = g.amount - g.paid;
-                    const net = remaining; // الصافي = المتبقي (يمكن تعديله لاحقاً)
+
+            if (type === 'summary') {
+                titleEl.textContent = 'ملخص العميل × الخصم';
+                headEl.innerHTML = `<tr>
+                    <th>العميل</th><th>الخصم</th><th>عدد الفواتير</th>
+                    <th>إجمالي المبلغ</th><th>إجمالي المدفوع</th>
+                    <th>المتبقي</th><th>الصافي</th><th>الإجراءات</th>
+                </tr>`;
+                const groups = {};
+                invoices.forEach(inv => {
+                    const key = (inv.clientId || '') + '|' + (inv.counterpartyClientId || '');
+                    if (!groups[key]) {
+                        groups[key] = { clientId: inv.clientId || '', counterpartyId: inv.counterpartyClientId || '', count: 0, amount: 0, paid: 0 };
+                    }
+                    groups[key].count += 1;
+                    groups[key].amount += Number(inv.amount) || 0;
+                    groups[key].paid += Number(inv.paid) || 0;
+                });
+                Object.values(groups)
+                    .sort((a, b) => (b.amount - b.paid) - (a.amount - a.paid))
+                    .forEach(g => {
+                        const client = db.clients.find(c => c.id == g.clientId);
+                        const counter = db.clients.find(c => c.id == g.counterpartyId);
+                        const remaining = g.amount - g.paid;
+                        const tr = tbody.insertRow();
+                        tr.innerHTML = `
+                            <td>${client ? client.name : '-'}</td>
+                            <td>${counter ? counter.name : '— لا يوجد —'}</td>
+                            <td>${g.count}</td>
+                            <td>${g.amount.toFixed(2)} ر.س</td>
+                            <td>${g.paid.toFixed(2)} ر.س</td>
+                            <td style="color:${remaining > 0 ? '#dc2626' : '#10b981'};font-weight:bold;">${remaining.toFixed(2)} ر.س</td>
+                            <td>${remaining.toFixed(2)} ر.س</td>
+                            <td>
+                                ${remaining > 0 ? `<button class="btn btn-success btn-small" onclick="createSettlementFromReport('${g.clientId}','${g.counterpartyId}',${remaining},${g.amount},${g.paid})">
+                                    <i class="fas fa-file-signature"></i> إقرار
+                                </button>` : '<span class="status-badge status-completed">مسددة</span>'}
+                            </td>
+                        `;
+                    });
+            } else if (type === 'invoices') {
+                titleEl.textContent = 'تفاصيل الفواتير';
+                headEl.innerHTML = `<tr>
+                    <th>التاريخ</th><th>العميل</th><th>الخصم</th>
+                    <th>المرجع</th><th>البيان</th>
+                    <th>المبلغ</th><th>المدفوع</th><th>المتبقي</th>
+                    <th>الحالة</th><th>الإجراءات</th>
+                </tr>`;
+                const sorted = [...invoices].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+                sorted.forEach(inv => {
+                    const client = db.clients.find(c => c.id == inv.clientId);
+                    const counter = db.clients.find(c => c.id == inv.counterpartyClientId);
+                    const amount = Number(inv.amount) || 0;
+                    const paid = Number(inv.paid) || 0;
+                    const remaining = (typeof inv.remaining === 'number') ? inv.remaining : (amount - paid);
+                    const statusClass = inv.status === 'مدفوعة' ? 'completed' : 'pending';
                     const tr = tbody.insertRow();
                     tr.innerHTML = `
+                        <td>${inv.date || '-'}</td>
                         <td>${client ? client.name : '-'}</td>
-                        <td>${counter ? counter.name : '— لا يوجد —'}</td>
-                        <td>${g.count}</td>
-                        <td>${g.amount.toFixed(2)} ر.س</td>
-                        <td>${g.paid.toFixed(2)} ر.س</td>
-                        <td style="color:${remaining > 0 ? '#dc2626' : '#10b981'};font-weight:bold;">${remaining.toFixed(2)} ر.س</td>
-                        <td>${net.toFixed(2)} ر.س</td>
+                        <td>${counter ? counter.name : '-'}</td>
+                        <td>${inv.reference || '-'}</td>
+                        <td>${inv.description || '-'}</td>
+                        <td>${amount.toFixed(2)}</td>
+                        <td>${paid.toFixed(2)}</td>
+                        <td style="color:${remaining > 0 ? '#dc2626' : '#10b981'};font-weight:bold;">${remaining.toFixed(2)}</td>
+                        <td><span class="status-badge status-${statusClass}">${inv.status || '-'}</span></td>
                         <td>
-                            ${remaining > 0 ? `<button class="btn btn-success btn-small" onclick="createSettlementFromReport('${g.clientId}','${g.counterpartyId}',${remaining},${g.amount},${g.paid})">
-                                <i class="fas fa-file-signature"></i> إقرار بالمبلغ
-                            </button>` : '<span class="status-badge status-completed">مسددة</span>'}
+                            ${remaining > 0 ? `<button class="btn btn-success btn-small" onclick="createSettlementFromInvoice('${inv.id}')" title="إقرار بالمتبقي"><i class="fas fa-file-signature"></i></button>` : ''}
                         </td>
                     `;
                 });
+            } else if (type === 'settlements') {
+                titleEl.textContent = 'المخالصات';
+                headEl.innerHTML = `<tr>
+                    <th>الرقم</th><th>التاريخ</th><th>العميل</th>
+                    <th>الإجمالي</th><th>المدفوع</th><th>المتبقي</th>
+                    <th>الحالة</th><th>الملاحظات</th>
+                </tr>`;
+                const sorted = [...settlements].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+                sorted.forEach(s => {
+                    const client = db.clients.find(c => c.id == s.clientId);
+                    const notes = (s.notes || '').substring(0, 60);
+                    const tr = tbody.insertRow();
+                    tr.innerHTML = `
+                        <td>SETL-${String(s.id).substring(0, 8)}</td>
+                        <td>${s.date || '-'}</td>
+                        <td>${client ? client.name : '-'}</td>
+                        <td>${(Number(s.total) || 0).toFixed(2)}</td>
+                        <td>${(Number(s.paid) || 0).toFixed(2)}</td>
+                        <td>${(Number(s.remaining) || 0).toFixed(2)}</td>
+                        <td><span class="status-badge status-${s.status === 'مسدد' ? 'completed' : 'active'}">${s.status || '-'}</span></td>
+                        <td>${notes}${s.notes && s.notes.length > 60 ? '...' : ''}</td>
+                    `;
+                });
+            } else if (type === 'transactions') {
+                titleEl.textContent = 'العمليات المالية';
+                headEl.innerHTML = `<tr>
+                    <th>التاريخ</th><th>العميل</th><th>النوع</th><th>المبلغ</th>
+                </tr>`;
+                const sorted = [...transactions].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+                sorted.forEach(t => {
+                    const client = db.clients.find(c => c.id == t.clientId);
+                    const tr = tbody.insertRow();
+                    tr.innerHTML = `
+                        <td>${t.date || '-'}</td>
+                        <td>${client ? client.name : '-'}</td>
+                        <td><span class="status-badge ${t.type === 'دخل' ? 'status-active' : 'status-danger'}">${t.type || '-'}</span></td>
+                        <td>${(Number(t.amount) || 0).toFixed(2)} ر.س</td>
+                    `;
+                });
+            } else if (type === 'all') {
+                titleEl.textContent = 'كل بيانات العميل';
+                headEl.innerHTML = `<tr>
+                    <th>التاريخ</th><th>النوع</th><th>التفاصيل</th>
+                    <th>المبلغ</th><th>الحالة</th>
+                </tr>`;
+                const allRecords = [];
+                invoices.forEach(inv => {
+                    const counter = db.clients.find(c => c.id == inv.counterpartyClientId);
+                    const amount = Number(inv.amount) || 0;
+                    const paid = Number(inv.paid) || 0;
+                    const remaining = (typeof inv.remaining === 'number') ? inv.remaining : (amount - paid);
+                    allRecords.push({
+                        date: inv.date || '',
+                        type: 'فاتورة',
+                        details: (inv.description || inv.reference || '') + (counter ? ` (مع ${counter.name})` : '') + ` — متبقي: ${remaining.toFixed(2)}`,
+                        amount,
+                        status: inv.status || '-'
+                    });
+                });
+                settlements.forEach(s => {
+                    allRecords.push({
+                        date: s.date || '',
+                        type: 'مخالصة',
+                        details: (s.notes || '').substring(0, 80),
+                        amount: Number(s.total) || 0,
+                        status: s.status || '-'
+                    });
+                });
+                transactions.forEach(t => {
+                    allRecords.push({
+                        date: t.date || '',
+                        type: t.type === 'دخل' ? 'دخل' : 'مصروف',
+                        details: '-',
+                        amount: Number(t.amount) || 0,
+                        status: '-'
+                    });
+                });
+                allRecords.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+                allRecords.forEach(r => {
+                    const tr = tbody.insertRow();
+                    tr.innerHTML = `
+                        <td>${r.date || '-'}</td>
+                        <td>${r.type}</td>
+                        <td>${r.details}</td>
+                        <td>${r.amount.toFixed(2)} ر.س</td>
+                        <td>${r.status}</td>
+                    `;
+                });
+            }
+
+            const countEl = document.getElementById('reportsCount');
+            if (countEl) countEl.textContent = `${tbody.rows.length} سجل`;
+
+            updateReportsChart(type, totalAmount, totalPaid, totalRemaining);
+        }
+
+        function updateReportsChart(type, totalAmount, totalPaid, totalRemaining) {
+            const container = document.getElementById('reportsChartContainer');
+            const ctx = document.getElementById('reportsChart');
+            if (!ctx || !container) return;
+
+            // Only show chart for invoice-based report types
+            if (type !== 'summary' && type !== 'invoices' && type !== 'all') {
+                container.style.display = 'none';
+                return;
+            }
+            container.style.display = 'block';
+
+            const data = {
+                labels: ['إجمالي المبلغ', 'المدفوع', 'المتبقي'],
+                datasets: [{
+                    data: [totalAmount, totalPaid, totalRemaining > 0 ? totalRemaining : 0],
+                    backgroundColor: ['#1a4d2e', '#10b981', '#dc2626'],
+                    borderWidth: 2,
+                    borderColor: '#fff'
+                }]
+            };
+
+            if (reportsChart) {
+                reportsChart.data = data;
+                reportsChart.update();
+            } else {
+                reportsChart = new Chart(ctx, {
+                    type: 'doughnut',
+                    data,
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'bottom', labels: { font: { family: 'Arial' } } },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(ctx) {
+                                        return ctx.label + ': ' + Number(ctx.raw).toFixed(2) + ' ر.س';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
         }
 
         // ========================================
@@ -3029,7 +3300,7 @@
                 }
 
                 if (rows.length === 0) {
-                    throw new Error('لم يتم العثور على بيانات قابلة للقراءة في الملف');
+                    throw new Error('لم يتم العثور على بيانات في الملف. اضغط F12 وراجع رسائل [Statement] في الـ Console لمعرفة محتوى الملف.');
                 }
 
                 pendingStatement = {
@@ -3055,27 +3326,67 @@
                         const workbook = XLSX.read(data, { type: 'array', cellDates: true });
                         const sheet = workbook.Sheets[workbook.SheetNames[0]];
                         const arr = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false });
+
+                        console.log('[Statement] Total rows in file:', arr.length);
+                        console.log('[Statement] First 10 rows:', arr.slice(0, 10));
+
                         if (arr.length < 1) { resolve([]); return; }
 
-                        // Find header row (first row with at least 2 non-empty cells)
-                        let headerIdx = 0;
-                        for (let i = 0; i < arr.length; i++) {
-                            const nonEmpty = arr[i].filter(c => String(c).trim() !== '').length;
-                            if (nonEmpty >= 2) { headerIdx = i; break; }
+                        // Find best header row by scanning first 15 rows for the highest mapping score
+                        let bestHeaderIdx = -1;
+                        let bestMapping = null;
+                        let bestScore = 0;
+                        const scanLimit = Math.min(arr.length, 15);
+                        for (let i = 0; i < scanLimit; i++) {
+                            if (!arr[i]) continue;
+                            const headers = arr[i].map(h => String(h || '').trim());
+                            const m = detectColumnMapping(headers);
+                            const score = Object.values(m).filter(v => v !== -1).length;
+                            if (score > bestScore) {
+                                bestScore = score;
+                                bestMapping = m;
+                                bestHeaderIdx = i;
+                            }
                         }
-                        const headers = arr[headerIdx].map(h => String(h || '').trim());
-                        const mapping = detectColumnMapping(headers);
+
+                        console.log('[Statement] Best header row:', bestHeaderIdx, 'Score:', bestScore, 'Mapping:', bestMapping);
+
+                        let mapping, headerIdx;
+                        if (bestScore >= 2) {
+                            // We found a reasonable header row
+                            mapping = bestMapping;
+                            headerIdx = bestHeaderIdx;
+                            console.log('[Statement] Detected headers:', arr[headerIdx]);
+                        } else {
+                            // Fallback: assume first non-empty row is header and use positional mapping
+                            let firstDataRow = 0;
+                            for (let i = 0; i < arr.length; i++) {
+                                if (arr[i] && arr[i].some(c => String(c).trim() !== '')) { firstDataRow = i; break; }
+                            }
+                            headerIdx = firstDataRow;
+                            // Positional: date, ref, description, debit, credit, balance
+                            mapping = { date: 0, reference: 1, description: 2, debit: 3, credit: 4, balance: 5 };
+                            console.warn('[Statement] No headers detected, using positional fallback. Check console for row contents.');
+                        }
+
                         const rows = [];
                         for (let i = headerIdx + 1; i < arr.length; i++) {
                             const row = arr[i];
-                            if (!row || row.every(c => c === '' || c == null)) continue;
+                            if (!row) continue;
+                            // Only skip rows that are entirely empty
+                            if (row.every(c => c === '' || c == null)) continue;
                             const r = normalizeStatementRow(row, mapping);
-                            // Skip rows that are completely empty after normalization
-                            if (!r.date && !r.description && !r.reference && r.debit === 0 && r.credit === 0 && r.balance === 0) continue;
+                            // Include all rows even if some fields are empty — user can clean up in preview
                             rows.push(r);
                         }
+
+                        console.log('[Statement] Parsed rows:', rows.length);
+                        if (rows.length > 0) console.log('[Statement] First 3 parsed rows:', rows.slice(0, 3));
                         resolve(rows);
-                    } catch (err) { reject(err); }
+                    } catch (err) {
+                        console.error('[Statement] Parse error:', err);
+                        reject(err);
+                    }
                 };
                 reader.onerror = () => reject(new Error('فشل قراءة الملف'));
                 reader.readAsArrayBuffer(file);
@@ -3085,12 +3396,12 @@
         function detectColumnMapping(headers) {
             const map = { date: -1, reference: -1, description: -1, debit: -1, credit: -1, balance: -1 };
             const patterns = {
-                date: ['date', 'التاريخ', 'تاريخ', 'يوم'],
-                reference: ['ref', 'reference', 'المرجع', 'مرجع', 'رقم العملية', 'رقم'],
-                description: ['desc', 'description', 'البيان', 'الوصف', 'بيان', 'تفاصيل', 'details', 'notes', 'ملاحظ'],
-                debit: ['debit', 'مدين', 'دين', 'سحب', 'withdraw'],
-                credit: ['credit', 'دائن', 'إيداع', 'ايداع', 'deposit'],
-                balance: ['balance', 'الرصيد', 'رصيد']
+                date: ['date', 'التاريخ', 'تاريخ', 'يوم', 'اليوم', 'تاريخ العملية'],
+                reference: ['ref', 'reference', 'المرجع', 'مرجع', 'رقم العملية', 'رقم', 'voucher', 'transaction', 'عملية', 'سند', 'الشيك'],
+                description: ['desc', 'description', 'البيان', 'الوصف', 'بيان', 'تفاصيل', 'details', 'notes', 'ملاحظ', 'narrative', 'الملاحظات'],
+                debit: ['debit', 'مدين', 'دين', 'سحب', 'السحب', 'withdraw', 'منصرف', 'المنصرف', 'خصم', 'الخصم', 'مدفوع', 'paid out', 'out', 'expense'],
+                credit: ['credit', 'دائن', 'إيداع', 'الإيداع', 'ايداع', 'الايداع', 'deposit', 'مضاف', 'المضاف', 'إضافة', 'الإضافة', 'وارد', 'الوارد', 'paid in', 'in', 'income'],
+                balance: ['balance', 'الرصيد', 'رصيد', 'closing', 'الرصيد الجاري', 'المتبقي']
             };
             headers.forEach((h, i) => {
                 const low = String(h).toLowerCase().trim();
