@@ -1641,12 +1641,16 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label>المبلغ الإجمالي *</label>
-                        <input type="number" id="settlementTotal" step="0.01" required>
+                        <input type="number" id="settlementTotal" step="0.01" required oninput="markSettlementFieldManual('settlementTotal')">
                     </div>
                     <div class="form-group">
                         <label>المبلغ المسدد *</label>
-                        <input type="number" id="settlementPaid" step="0.01" required oninput="distributeSettlementPaid()">
+                        <input type="number" id="settlementPaid" step="0.01" required oninput="markSettlementFieldManual('settlementPaid'); distributeSettlementPaid();">
                     </div>
+                </div>
+                <div class="form-group" style="background:#f7f7f7;padding:10px;border-radius:6px;display:flex;justify-content:space-between;align-items:center;margin-top:-5px;">
+                    <label style="margin:0;font-size:13px;">المبلغ المتبقي:</label>
+                    <span id="settlementRemainingDisplay" style="font-weight:bold;font-size:15px;color:#dc2626;">0.00 ر.س</span>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
@@ -2629,11 +2633,18 @@
         function openSettlementModal() {
             document.getElementById('settlementId').value = '';
             document.getElementById('settlementClient').value = '';
-            document.getElementById('settlementTotal').value = '';
-            document.getElementById('settlementPaid').value = '';
+            const totalEl = document.getElementById('settlementTotal');
+            const paidEl = document.getElementById('settlementPaid');
+            totalEl.value = '';
+            paidEl.value = '';
+            // Clear manual-edit flags so auto-fill works on fresh open
+            delete totalEl.dataset.manual;
+            delete paidEl.dataset.manual;
             document.getElementById('settlementDate').valueAsDate = new Date();
             document.getElementById('settlementStatus').value = 'نشط';
             document.getElementById('settlementNotes').value = '';
+            const remainEl = document.getElementById('settlementRemainingDisplay');
+            if (remainEl) { remainEl.textContent = '0.00 ر.س'; remainEl.style.color = '#dc2626'; }
             // Reset invoice list
             const list = document.getElementById('settlementInvoiceList');
             if (list) list.innerHTML = '<p style="color:#888; font-size:12px; text-align:center; margin:10px 0;">اختر العميل لعرض فواتيره غير المسددة</p>';
@@ -2680,6 +2691,12 @@
                 </div>`;
             }).join('');
             list.innerHTML = rows;
+            // Reset manual flags when list is rebuilt so auto-calc takes over
+            const totalEl = document.getElementById('settlementTotal');
+            const paidEl = document.getElementById('settlementPaid');
+            if (totalEl) delete totalEl.dataset.manual;
+            if (paidEl) delete paidEl.dataset.manual;
+            recomputeSettlementTotals();
         }
 
         function onInvoiceCheckChange(checkbox) {
@@ -2693,6 +2710,7 @@
                 input.value = '';
             }
             updateAppliedTotal();
+            recomputeSettlementTotals();
         }
 
         function updateAppliedTotal() {
@@ -2706,6 +2724,52 @@
             });
             const el = document.getElementById('settlementAppliedTotal');
             if (el) el.textContent = total.toFixed(2);
+            // Keep المسدد in sync with sum of applied amounts
+            const paidEl = document.getElementById('settlementPaid');
+            if (paidEl && !paidEl.dataset.manual) paidEl.value = total.toFixed(2);
+            recomputeSettlementTotals();
+        }
+
+        // Sum remaining of all CHECKED invoices = إجمالي المخالصة
+        // Sum applied amounts = المسدد
+        // المتبقي = الإجمالي - المسدد
+        function recomputeSettlementTotals() {
+            const list = document.getElementById('settlementInvoiceList');
+            const totalEl = document.getElementById('settlementTotal');
+            const paidEl = document.getElementById('settlementPaid');
+            const remainEl = document.getElementById('settlementRemainingDisplay');
+            if (!list || !totalEl) return;
+
+            let totalDue = 0;
+            let totalPaid = 0;
+            list.querySelectorAll('.settlement-inv-check:checked').forEach(cb => {
+                const row = cb.closest('[data-invoice-id]');
+                totalDue += parseFloat(row.dataset.remaining) || 0;
+                const input = row.querySelector('.settlement-inv-amount');
+                totalPaid += parseFloat(input.value) || 0;
+            });
+
+            // Auto-fill total only if user hasn't manually edited it
+            if (!totalEl.dataset.manual) {
+                totalEl.value = totalDue.toFixed(2);
+            }
+            if (paidEl && !paidEl.dataset.manual) {
+                paidEl.value = totalPaid.toFixed(2);
+            }
+
+            const totalVal = parseFloat(totalEl.value) || 0;
+            const paidVal = parseFloat(paidEl?.value) || 0;
+            const rem = totalVal - paidVal;
+            if (remainEl) {
+                remainEl.textContent = rem.toFixed(2) + ' ر.س';
+                remainEl.style.color = rem > 0.01 ? '#dc2626' : '#10b981';
+            }
+        }
+
+        function markSettlementFieldManual(field) {
+            const el = document.getElementById(field);
+            if (el) el.dataset.manual = '1';
+            recomputeSettlementTotals();
         }
 
         function distributeSettlementPaid() {
