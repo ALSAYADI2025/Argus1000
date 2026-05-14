@@ -9,6 +9,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <!-- Firebase SDK (compat) for cross-user shared storage -->
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
     <style>
         * {
@@ -470,6 +471,31 @@
         .section { display: none; }
         .section.active { display: block; }
 
+        /* ========== Role-based visibility ========== */
+        /* Hidden until role is determined to prevent flicker */
+        body:not(.role-admin) .admin-only { display: none !important; }
+        body:not(.role-client) .client-only { display: none !important; }
+        /* Loading state for initial auth check */
+        body.role-loading main,
+        body.role-loading .sidebar,
+        body.role-loading .header-right,
+        body.role-loading .header-center { visibility: hidden; }
+        body.role-loading::before {
+            content: '';
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            width: 50px;
+            height: 50px;
+            margin: -25px 0 0 -25px;
+            border: 4px solid #e5e5e5;
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: auth-spin 0.8s linear infinite;
+            z-index: 9999;
+        }
+        @keyframes auth-spin { to { transform: rotate(360deg); } }
+
         .chart-container {
             background: white;
             padding: 20px;
@@ -686,10 +712,10 @@
         </div>
 
         <div class="header-right">
-            <div class="user-avatar">أ</div>
+            <div class="user-avatar">·</div>
             <div>
-                <div style="font-size: 13px;">إدارة النظام</div>
-                <div style="font-size: 11px; opacity: 0.8;">مدير</div>
+                <div class="header-user-name" style="font-size: 13px;">—</div>
+                <div class="header-user-role" style="font-size: 11px; opacity: 0.8;">—</div>
             </div>
             <button class="btn btn-danger btn-small" onclick="logout()">
                 <i class="fas fa-sign-out-alt"></i>
@@ -715,7 +741,7 @@
             <div class="sidebar-section">
                 <div class="sidebar-title">إدارة البيانات</div>
                 <ul class="sidebar-menu">
-                    <li><a onclick="switchSection('clients')" class="nav-link">
+                    <li class="admin-only"><a onclick="switchSection('clients')" class="nav-link">
                         <i class="fas fa-users"></i> العملاء
                         <span class="sidebar-badge" id="clientsCount">0</span>
                     </a></li>
@@ -742,7 +768,7 @@
                 </ul>
             </div>
 
-            <div class="sidebar-section">
+            <div class="sidebar-section admin-only">
                 <div class="sidebar-title">الإدارة</div>
                 <ul class="sidebar-menu">
                     <li><a onclick="switchSection('users')" class="nav-link">
@@ -750,6 +776,14 @@
                     </a></li>
                     <li><a onclick="switchSection('reports')" class="nav-link">
                         <i class="fas fa-chart-bar"></i> التقارير
+                    </a></li>
+                </ul>
+            </div>
+            <div class="sidebar-section client-only">
+                <div class="sidebar-title">التقارير</div>
+                <ul class="sidebar-menu">
+                    <li><a onclick="switchSection('reports')" class="nav-link">
+                        <i class="fas fa-chart-bar"></i> تقاريري
                     </a></li>
                 </ul>
             </div>
@@ -1168,9 +1202,9 @@
             </div>
             <form onsubmit="saveTransaction(event)">
                 <input type="hidden" id="transactionId">
-                <div class="form-group">
+                <div class="form-group admin-only">
                     <label>العميل *</label>
-                    <select id="transactionClient" required></select>
+                    <select id="transactionClient"></select>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
@@ -1206,9 +1240,9 @@
             </div>
             <form onsubmit="saveInvoice(event)">
                 <input type="hidden" id="invoiceId">
-                <div class="form-group">
+                <div class="form-group admin-only">
                     <label>العميل *</label>
-                    <select id="invoiceClient" required></select>
+                    <select id="invoiceClient"></select>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
@@ -1245,6 +1279,10 @@
             </div>
             <form onsubmit="saveCase(event)">
                 <input type="hidden" id="caseId">
+                <div class="form-group admin-only">
+                    <label>العميل</label>
+                    <select id="caseClient"></select>
+                </div>
                 <div class="form-group">
                     <label>العنوان *</label>
                     <input type="text" id="caseTitle" required>
@@ -1294,9 +1332,9 @@
             </div>
             <form onsubmit="saveSettlement(event)">
                 <input type="hidden" id="settlementId">
-                <div class="form-group">
+                <div class="form-group admin-only">
                     <label>العميل *</label>
-                    <select id="settlementClient" required></select>
+                    <select id="settlementClient"></select>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
@@ -1342,6 +1380,10 @@
                 <button class="close-btn" onclick="closeModal('fileModal')">&times;</button>
             </div>
             <form onsubmit="saveFile(event)">
+                <div class="form-group admin-only">
+                    <label>العميل</label>
+                    <select id="fileClient"></select>
+                </div>
                 <div class="form-group">
                     <label>الملف *</label>
                     <input type="file" id="fileInput" required>
@@ -1375,13 +1417,17 @@
                     <label>البريد الإلكتروني *</label>
                     <input type="email" id="userEmail" required>
                 </div>
+                <div class="form-group" id="userPasswordGroup">
+                    <label>كلمة المرور * (6 أحرف أو أكثر)</label>
+                    <input type="password" id="userPassword" minlength="6">
+                    <small style="color:#666; font-size:11px;">عند التعديل: اتركها فارغة للإبقاء على كلمة المرور الحالية</small>
+                </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label>الدور</label>
-                        <select id="userRole">
-                            <option value="مدير">مدير</option>
-                            <option value="محاسب">محاسب</option>
-                            <option value="موظف">موظف</option>
+                        <label>الدور *</label>
+                        <select id="userRole" onchange="toggleClientLinkField()">
+                            <option value="admin">مدير</option>
+                            <option value="client">عميل</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -1391,6 +1437,13 @@
                             <option value="غير نشط">غير نشط</option>
                         </select>
                     </div>
+                </div>
+                <div class="form-group" id="userClientLinkGroup" style="display:none;">
+                    <label>ربط بسجل عميل موجود (اختياري)</label>
+                    <select id="userClientLink">
+                        <option value="">إنشاء سجل عميل جديد تلقائياً</option>
+                    </select>
+                    <small style="color:#666; font-size:11px;">إذا اخترت سجلاً موجوداً، ستُربط بياناته بهذا الحساب</small>
                 </div>
                 <div style="margin-top: 20px; display: flex; gap: 10px;">
                     <button type="submit" class="btn btn-primary">حفظ</button>
@@ -1422,17 +1475,42 @@
         };
 
         let firestore = null;
+        let auth = null;
+        let secondaryApp = null;
         let firebaseReady = false;
         try {
             if (firebaseConfig.apiKey) {
                 firebase.initializeApp(firebaseConfig);
                 firestore = firebase.firestore();
+                auth = firebase.auth();
+                // Secondary app for creating new users without signing out admin
+                secondaryApp = firebase.initializeApp(firebaseConfig, 'secondary');
                 firebaseReady = true;
             } else {
                 console.warn('⚠️ Firebase غير مُعَدّ. عدّل firebaseConfig في الكود لمشاركة البيانات بين المستخدمين. حاليًا يتم استخدام التخزين المحلي.');
             }
         } catch (err) {
             console.error('فشل تهيئة Firebase:', err);
+        }
+
+        // ========================================
+        // Current user / role state
+        // ========================================
+        let currentUser = null; // { uid, name, email, role, clientId, status }
+
+        function isAdmin() { return currentUser && currentUser.role === 'admin'; }
+        function isClient() { return currentUser && currentUser.role === 'client'; }
+
+        function filterMine(items, key) {
+            key = key || 'clientId';
+            if (!currentUser || isAdmin()) return items;
+            return items.filter(item => item[key] === currentUser.clientId);
+        }
+
+        function getClientIdForSave(selectId) {
+            if (isClient()) return currentUser.clientId || '';
+            const el = document.getElementById(selectId);
+            return el ? el.value : '';
         }
 
         // ========================================
@@ -1530,19 +1608,19 @@
         // ========================================
 
         function renderAfterChange(collection) {
-            // Update sidebar badges and dashboard counts every time
+            // Sidebar badges show counts visible to the current user (filtered for clients)
             const elClients = document.getElementById('clientsCount');
             if (elClients) elClients.textContent = db.clients.length;
             const elTrans = document.getElementById('transactionsCount');
-            if (elTrans) elTrans.textContent = db.transactions.length;
+            if (elTrans) elTrans.textContent = filterMine(db.transactions).length;
             const elInv = document.getElementById('invoicesCount');
-            if (elInv) elInv.textContent = db.invoices.length;
+            if (elInv) elInv.textContent = filterMine(db.invoices).length;
             const elCases = document.getElementById('casesCount');
-            if (elCases) elCases.textContent = db.cases.length;
+            if (elCases) elCases.textContent = filterMine(db.cases).length;
             const elSet = document.getElementById('settlementsCount');
-            if (elSet) elSet.textContent = db.settlements.length;
+            if (elSet) elSet.textContent = filterMine(db.settlements).length;
             const elFiles = document.getElementById('filesCount');
-            if (elFiles) elFiles.textContent = db.files.length;
+            if (elFiles) elFiles.textContent = filterMine(db.files).length;
 
             // Refresh table of the changed collection (or all if unspecified)
             const renderers = {
@@ -1747,7 +1825,7 @@
 
             const id = document.getElementById('transactionId').value;
             const transaction = {
-                clientId: document.getElementById('transactionClient').value,
+                clientId: getClientIdForSave('transactionClient'),
                 amount: parseFloat(document.getElementById('transactionAmount').value),
                 type: document.getElementById('transactionType').value,
                 date: document.getElementById('transactionDate').value
@@ -1771,7 +1849,8 @@
             if (!tbody) return;
             tbody.innerHTML = '';
 
-            db.transactions.forEach(trans => {
+            const items = filterMine(db.transactions);
+            items.forEach(trans => {
                 const client = db.clients.find(c => c.id == trans.clientId);
                 const row = tbody.insertRow();
                 row.innerHTML = `
@@ -1792,7 +1871,7 @@
                 `;
             });
 
-            document.getElementById('transactionsCount').textContent = db.transactions.length;
+            document.getElementById('transactionsCount').textContent = items.length;
         }
 
         function editTransaction(id) {
@@ -1836,7 +1915,7 @@
 
             const id = document.getElementById('invoiceId').value;
             const invoice = {
-                clientId: document.getElementById('invoiceClient').value,
+                clientId: getClientIdForSave('invoiceClient'),
                 amount: parseFloat(document.getElementById('invoiceAmount').value),
                 date: document.getElementById('invoiceDate').value,
                 status: document.getElementById('invoiceStatus').value
@@ -1860,7 +1939,8 @@
             if (!tbody) return;
             tbody.innerHTML = '';
 
-            db.invoices.forEach(inv => {
+            const items = filterMine(db.invoices);
+            items.forEach(inv => {
                 const client = db.clients.find(c => c.id == inv.clientId);
                 const row = tbody.insertRow();
                 row.innerHTML = `
@@ -1880,7 +1960,7 @@
                 `;
             });
 
-            document.getElementById('invoicesCount').textContent = db.invoices.length;
+            document.getElementById('invoicesCount').textContent = items.length;
         }
 
         function editInvoice(id) {
@@ -1917,6 +1997,8 @@
             document.getElementById('caseParty2').value = '';
             document.getElementById('caseStatus').value = 'مفتوحة';
             document.getElementById('casePriority').value = 'متوسطة';
+            const caseClient = document.getElementById('caseClient');
+            if (caseClient) caseClient.value = '';
             openModal('caseModal');
         }
 
@@ -1925,6 +2007,7 @@
 
             const id = document.getElementById('caseId').value;
             const caseData = {
+                clientId: getClientIdForSave('caseClient'),
                 title: document.getElementById('caseTitle').value,
                 party1: document.getElementById('caseParty1').value,
                 party2: document.getElementById('caseParty2').value,
@@ -1950,7 +2033,8 @@
             if (!tbody) return;
             tbody.innerHTML = '';
 
-            db.cases.forEach(caseData => {
+            const items = filterMine(db.cases);
+            items.forEach(caseData => {
                 const row = tbody.insertRow();
                 row.innerHTML = `
                     <td>CASE-${String(caseData.id).substring(0, 8)}</td>
@@ -1970,7 +2054,7 @@
                 `;
             });
 
-            document.getElementById('casesCount').textContent = db.cases.length;
+            document.getElementById('casesCount').textContent = items.length;
         }
 
         function editCase(id) {
@@ -1978,6 +2062,8 @@
             if (!caseData) return;
 
             document.getElementById('caseId').value = caseData.id;
+            const caseClient = document.getElementById('caseClient');
+            if (caseClient) caseClient.value = caseData.clientId || '';
             document.getElementById('caseTitle').value = caseData.title;
             document.getElementById('caseParty1').value = caseData.party1;
             document.getElementById('caseParty2').value = caseData.party2;
@@ -2019,7 +2105,7 @@
             const total = parseFloat(document.getElementById('settlementTotal').value);
             const paid = parseFloat(document.getElementById('settlementPaid').value);
             const settlement = {
-                clientId: document.getElementById('settlementClient').value,
+                clientId: getClientIdForSave('settlementClient'),
                 total: total,
                 paid: paid,
                 remaining: total - paid,
@@ -2046,7 +2132,8 @@
             if (!tbody) return;
             tbody.innerHTML = '';
 
-            db.settlements.forEach(settlement => {
+            const items = filterMine(db.settlements);
+            items.forEach(settlement => {
                 const client = db.clients.find(c => c.id == settlement.clientId);
                 const row = tbody.insertRow();
                 row.innerHTML = `
@@ -2071,7 +2158,7 @@
                 `;
             });
 
-            document.getElementById('settlementsCount').textContent = db.settlements.length;
+            document.getElementById('settlementsCount').textContent = items.length;
         }
 
         function editSettlement(id) {
@@ -2145,7 +2232,12 @@
         }
 
         function printSettlement() {
-            printSettlementCert(db.settlements[0].id);
+            const visible = filterMine(db.settlements);
+            if (visible.length === 0) {
+                alert('لا توجد إقرارات للطباعة');
+                return;
+            }
+            printSettlementCert(visible[0].id);
         }
 
         // ========================================
@@ -2155,6 +2247,8 @@
         function openFileModal() {
             document.getElementById('fileInput').value = '';
             document.getElementById('fileDescription').value = '';
+            const fileClient = document.getElementById('fileClient');
+            if (fileClient) fileClient.value = '';
             openModal('fileModal');
         }
 
@@ -2165,6 +2259,7 @@
             if (!file) return;
 
             const fileData = {
+                clientId: getClientIdForSave('fileClient'),
                 name: file.name,
                 type: file.type,
                 size: (file.size / 1024).toFixed(2) + ' KB',
@@ -2186,7 +2281,8 @@
             if (!tbody) return;
             tbody.innerHTML = '';
 
-            db.files.forEach(file => {
+            const items = filterMine(db.files);
+            items.forEach(file => {
                 const row = tbody.insertRow();
                 row.innerHTML = `
                     <td>${file.name}</td>
@@ -2201,7 +2297,7 @@
                 `;
             });
 
-            document.getElementById('filesCount').textContent = db.files.length;
+            document.getElementById('filesCount').textContent = items.length;
         }
 
         async function deleteFile(id) {
@@ -2223,32 +2319,102 @@
             document.getElementById('userId').value = '';
             document.getElementById('userName').value = '';
             document.getElementById('userEmail').value = '';
-            document.getElementById('userRole').value = 'موظف';
+            document.getElementById('userPassword').value = '';
+            document.getElementById('userRole').value = 'admin';
             document.getElementById('userStatus').value = 'نشط';
+            const link = document.getElementById('userClientLink');
+            if (link) link.value = '';
+            // Password is required when creating a new user
+            document.getElementById('userPassword').required = true;
+            document.getElementById('userEmail').disabled = false;
+            toggleClientLinkField();
             openModal('userModal');
+        }
+
+        function toggleClientLinkField() {
+            const role = document.getElementById('userRole').value;
+            const group = document.getElementById('userClientLinkGroup');
+            if (group) group.style.display = (role === 'client') ? 'block' : 'none';
         }
 
         async function saveUser(event) {
             event.preventDefault();
 
             const id = document.getElementById('userId').value;
-            const user = {
-                name: document.getElementById('userName').value,
-                email: document.getElementById('userEmail').value,
-                role: document.getElementById('userRole').value,
-                status: document.getElementById('userStatus').value
-            };
+            const name = document.getElementById('userName').value.trim();
+            const email = document.getElementById('userEmail').value.trim();
+            const password = document.getElementById('userPassword').value;
+            const role = document.getElementById('userRole').value;
+            const status = document.getElementById('userStatus').value;
+            const linkedClientId = document.getElementById('userClientLink')?.value || '';
 
             try {
                 if (id) {
-                    await db.update('users', id, user);
-                } else {
-                    await db.add('users', user);
+                    // Edit existing user profile (cannot change email/password from here)
+                    const updateData = { name, role, status };
+                    if (role === 'client') {
+                        const existing = db.users.find(u => u.id === id);
+                        updateData.clientId = linkedClientId || (existing && existing.clientId) || '';
+                    } else {
+                        updateData.clientId = '';
+                    }
+                    await db.update('users', id, updateData);
+                    showAlert('usersAlert', 'تم تحديث المستخدم بنجاح');
+                    closeModal('userModal');
+                    return;
                 }
-                showAlert('usersAlert', 'تم حفظ المستخدم بنجاح');
+
+                // Create new user - validate password
+                if (!password || password.length < 6) {
+                    showAlert('usersAlert', 'كلمة المرور مطلوبة (6 أحرف أو أكثر)');
+                    return;
+                }
+                if (!firebaseReady || !secondaryApp) {
+                    showAlert('usersAlert', 'Firebase Auth غير متاح حالياً');
+                    return;
+                }
+
+                // Create auth account via secondary app (so admin stays logged in)
+                const cred = await secondaryApp.auth().createUserWithEmailAndPassword(email, password);
+                const uid = cred.user.uid;
+                await secondaryApp.auth().signOut();
+
+                // Determine clientId for client role
+                let clientId = '';
+                if (role === 'client') {
+                    if (linkedClientId) {
+                        clientId = linkedClientId;
+                    } else {
+                        // Auto-create a client record
+                        const newClientRef = await firestore.collection('clients').add({
+                            name,
+                            email,
+                            phone: '',
+                            bank: '',
+                            status: 'نشط'
+                        });
+                        clientId = newClientRef.id;
+                    }
+                }
+
+                // Write user profile keyed by Auth UID
+                await firestore.collection('users').doc(uid).set({
+                    name,
+                    email,
+                    role,
+                    status,
+                    clientId,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+
+                showAlert('usersAlert', 'تم إنشاء المستخدم بنجاح');
                 closeModal('userModal');
             } catch (err) {
-                showAlert('usersAlert', 'خطأ في الحفظ: ' + err.message);
+                let msg = err.message;
+                if (err.code === 'auth/email-already-in-use') msg = 'هذا البريد مستخدم بالفعل';
+                else if (err.code === 'auth/invalid-email') msg = 'البريد الإلكتروني غير صحيح';
+                else if (err.code === 'auth/weak-password') msg = 'كلمة المرور ضعيفة';
+                showAlert('usersAlert', 'خطأ: ' + msg);
             }
         }
 
@@ -2259,11 +2425,12 @@
 
             db.users.forEach(user => {
                 const row = tbody.insertRow();
+                const roleLabel = user.role === 'admin' ? 'مدير' : (user.role === 'client' ? 'عميل' : user.role);
                 row.innerHTML = `
-                    <td>${user.name}</td>
-                    <td>${user.email}</td>
-                    <td>${user.role}</td>
-                    <td><span class="status-badge status-${user.status === 'نشط' ? 'active' : 'pending'}">${user.status}</span></td>
+                    <td>${user.name || '-'}</td>
+                    <td>${user.email || '-'}</td>
+                    <td>${roleLabel}</td>
+                    <td><span class="status-badge status-${user.status === 'نشط' ? 'active' : 'pending'}">${user.status || '-'}</span></td>
                     <td>
                         <button class="btn btn-primary btn-small" onclick="editUser('${user.id}')">
                             <i class="fas fa-edit"></i>
@@ -2281,10 +2448,16 @@
             if (!user) return;
 
             document.getElementById('userId').value = user.id;
-            document.getElementById('userName').value = user.name;
-            document.getElementById('userEmail').value = user.email;
-            document.getElementById('userRole').value = user.role;
-            document.getElementById('userStatus').value = user.status;
+            document.getElementById('userName').value = user.name || '';
+            document.getElementById('userEmail').value = user.email || '';
+            document.getElementById('userEmail').disabled = true; // can't change email after creation
+            document.getElementById('userPassword').value = '';
+            document.getElementById('userPassword').required = false;
+            document.getElementById('userRole').value = user.role || 'admin';
+            document.getElementById('userStatus').value = user.status || 'نشط';
+            const link = document.getElementById('userClientLink');
+            if (link) link.value = user.clientId || '';
+            toggleClientLinkField();
             openModal('userModal');
         }
 
@@ -2304,18 +2477,29 @@
         // ========================================
 
         function updateDashboard() {
-            const incomeTotal = db.transactions
+            const myTransactions = filterMine(db.transactions);
+            const incomeTotal = myTransactions
                 .filter(t => t.type === 'دخل')
                 .reduce((sum, t) => sum + t.amount, 0);
 
-            const expenseTotal = db.transactions
+            const expenseTotal = myTransactions
                 .filter(t => t.type === 'مصروف')
                 .reduce((sum, t) => sum + t.amount, 0);
 
             document.getElementById('totalRevenue').textContent = incomeTotal.toFixed(2) + ' ر.س';
             document.getElementById('totalExpenses').textContent = expenseTotal.toFixed(2) + ' ر.س';
             document.getElementById('netBalance').textContent = (incomeTotal - expenseTotal).toFixed(2) + ' ر.س';
-            document.getElementById('clientsCount2').textContent = db.clients.length;
+
+            // For clients, replace "عدد العملاء" stat with "عدد فواتيري"
+            const clientsCountStat = document.getElementById('clientsCount2');
+            const clientsCountLabel = clientsCountStat && clientsCountStat.previousElementSibling;
+            if (isClient()) {
+                if (clientsCountLabel) clientsCountLabel.textContent = 'عدد فواتيري';
+                clientsCountStat.textContent = filterMine(db.invoices).length;
+            } else {
+                if (clientsCountLabel) clientsCountLabel.textContent = 'عدد العملاء';
+                clientsCountStat.textContent = db.clients.length;
+            }
 
             updateRecentTransactions();
             updateChart();
@@ -2325,7 +2509,7 @@
             const tbody = document.querySelector('#recentTransactionsTable tbody');
             tbody.innerHTML = '';
 
-            const recent = db.transactions.slice(-5).reverse();
+            const recent = filterMine(db.transactions).slice(-5).reverse();
             recent.forEach(trans => {
                 const client = db.clients.find(c => c.id == trans.clientId);
                 const row = tbody.insertRow();
@@ -2348,7 +2532,7 @@
             const incomeData = [0, 0, 0, 0, 0, 0];
             const expenseData = [0, 0, 0, 0, 0, 0];
 
-            db.transactions.forEach(trans => {
+            filterMine(db.transactions).forEach(trans => {
                 const date = new Date(trans.date);
                 const month = date.getMonth();
                 if (month < 6) {
@@ -2402,11 +2586,19 @@
         }
 
         function loadReports() {
-            document.getElementById('totalClients').textContent = db.clients.length;
-            document.getElementById('totalTransactions').textContent = db.transactions.length;
-            document.getElementById('totalInvoices').textContent = db.invoices.length;
-            document.getElementById('totalCases').textContent = db.cases.length;
-            document.getElementById('totalSettlements').textContent = db.settlements.length;
+            // Clients count makes sense only for admin
+            const elTC = document.getElementById('totalClients');
+            const elTCParent = elTC && elTC.closest('.stat-card');
+            if (isClient() && elTCParent) {
+                elTCParent.style.display = 'none';
+            } else if (elTCParent) {
+                elTCParent.style.display = '';
+                elTC.textContent = db.clients.length;
+            }
+            document.getElementById('totalTransactions').textContent = filterMine(db.transactions).length;
+            document.getElementById('totalInvoices').textContent = filterMine(db.invoices).length;
+            document.getElementById('totalCases').textContent = filterMine(db.cases).length;
+            document.getElementById('totalSettlements').textContent = filterMine(db.settlements).length;
         }
 
         // ========================================
@@ -2414,10 +2606,14 @@
         // ========================================
 
         function updateClientSelects() {
-            const selects = ['transactionClient', 'invoiceClient', 'settlementClient'];
+            const selects = ['transactionClient', 'invoiceClient', 'settlementClient', 'caseClient', 'fileClient', 'userClientLink'];
             selects.forEach(selectId => {
                 const select = document.getElementById(selectId);
-                select.innerHTML = '<option value="">اختر عميل</option>';
+                if (!select) return;
+                const placeholder = selectId === 'userClientLink'
+                    ? 'إنشاء سجل عميل جديد تلقائياً'
+                    : 'اختر عميل';
+                select.innerHTML = `<option value="">${placeholder}</option>`;
                 db.clients.forEach(client => {
                     const option = document.createElement('option');
                     option.value = client.id;
@@ -2462,19 +2658,65 @@
             showAlert('dashboardAlert', 'تم تحديث البيانات');
         }
 
-        function logout() {
-            if (confirm('هل تريد تسجيل الخروج؟')) {
-                window.location.href = 'login.html';
-            }
+        async function logout() {
+            if (!confirm('هل تريد تسجيل الخروج؟')) return;
+            try {
+                if (firebaseReady && auth) await auth.signOut();
+            } catch (e) { console.warn(e); }
+            window.location.href = 'login.html';
         }
 
         // ========================================
         // Initialize
         // ========================================
 
+        async function loadCurrentUserProfile(user) {
+            const doc = await firestore.collection('users').doc(user.uid).get();
+            if (doc.exists) {
+                return { uid: user.uid, email: user.email, ...doc.data() };
+            }
+            // No profile yet — check if any admin exists. If none, bootstrap this user as the first admin.
+            const adminSnap = await firestore.collection('users').where('role', '==', 'admin').limit(1).get();
+            if (adminSnap.empty) {
+                const profile = {
+                    name: user.email.split('@')[0],
+                    email: user.email,
+                    role: 'admin',
+                    status: 'نشط',
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
+                await firestore.collection('users').doc(user.uid).set(profile);
+                return { uid: user.uid, ...profile };
+            }
+            // An admin exists but this user has no profile — block them
+            return null;
+        }
+
+        function applyRoleUI() {
+            if (!currentUser) return;
+            document.body.classList.remove('role-loading', 'role-admin', 'role-client');
+            document.body.classList.add('role-' + currentUser.role);
+
+            // Update header user info
+            const nameEl = document.querySelector('.header-user-name');
+            const roleEl = document.querySelector('.header-user-role');
+            const avatarEl = document.querySelector('.user-avatar');
+            if (nameEl) nameEl.textContent = currentUser.name;
+            if (roleEl) roleEl.textContent = isAdmin() ? 'مدير' : 'عميل';
+            if (avatarEl && currentUser.name) avatarEl.textContent = currentUser.name.charAt(0);
+
+            // If client lands on an admin-only section, redirect to dashboard
+            if (isClient()) {
+                const active = document.querySelector('.section.active');
+                if (active && (active.id === 'clients' || active.id === 'users')) {
+                    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+                    document.getElementById('dashboard').classList.add('active');
+                }
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
-            // Start Firestore listeners (or fallback to localStorage)
-            db.init();
+            document.body.classList.add('role-loading');
 
             // Set today's date for date inputs
             const today = new Date().toISOString().split('T')[0];
@@ -2482,13 +2724,40 @@
                 if (!input.value) input.value = today;
             });
 
-            // Show a friendly banner if Firebase is not configured
             if (!firebaseReady) {
+                // Local mode: skip auth, show banner, just init local data
+                document.body.classList.remove('role-loading');
+                document.body.classList.add('role-admin'); // Treat local user as admin
+                currentUser = { uid: 'local', name: 'محلي', role: 'admin', status: 'نشط' };
+                applyRoleUI();
+                db.init();
                 const banner = document.createElement('div');
                 banner.style.cssText = 'background:#fef3c7;color:#92400e;padding:10px 16px;text-align:center;font-size:13px;border-bottom:1px solid #f59e0b;';
-                banner.innerHTML = '⚠️ <strong>Firebase غير مُعَدّ:</strong> البيانات تُحفظ محليًا فقط على هذا الجهاز. اضبط <code>firebaseConfig</code> في الكود لمشاركة البيانات بين جميع المستخدمين.';
+                banner.innerHTML = '⚠️ <strong>Firebase غير مُعَدّ:</strong> البيانات محلية فقط. تسجيل الدخول معطّل.';
                 document.body.insertBefore(banner, document.body.firstChild);
+                return;
             }
+
+            auth.onAuthStateChanged(async user => {
+                if (!user) {
+                    window.location.href = 'login.html';
+                    return;
+                }
+                try {
+                    const profile = await loadCurrentUserProfile(user);
+                    if (!profile) {
+                        alert('حسابك غير مرتبط بملف شخصي. تواصل مع مدير النظام.');
+                        await auth.signOut();
+                        return;
+                    }
+                    currentUser = profile;
+                    applyRoleUI();
+                    db.init();
+                } catch (err) {
+                    console.error('خطأ في تحميل الملف الشخصي:', err);
+                    alert('خطأ في تحميل البيانات: ' + err.message);
+                }
+            });
         });
     </script>
 </body>
