@@ -7,6 +7,9 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <!-- Firebase SDK (compat) for cross-user shared storage -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
     <style>
         * {
             margin: 0;
@@ -1400,39 +1403,166 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
     <script>
         // ========================================
-        // Data Storage (localStorage)
+        // Firebase Configuration
         // ========================================
-        
+        // خطوات الإعداد:
+        // 1. اذهب إلى https://console.firebase.google.com/ وأنشئ مشروع جديد
+        // 2. أضف تطبيق ويب (Web App) للمشروع
+        // 3. انسخ كائن firebaseConfig وضعه أسفل بدلاً من القيم الفارغة
+        // 4. في القائمة الجانبية: Build > Firestore Database > Create database
+        //    اختر "Start in test mode" (لمدة 30 يومًا، يكفي للتجربة)
+        // 5. احفظ الملف وافتح الصفحة - البيانات ستُشارك بين جميع المستخدمين
+        const firebaseConfig = {
+            apiKey: "AIzaSyCGpUhb_av1049ZlNJ-6GUU-qER1x08Ads",
+            authDomain: "argus1000-d6a40.firebaseapp.com",
+            projectId: "argus1000-d6a40",
+            storageBucket: "argus1000-d6a40.firebasestorage.app",
+            messagingSenderId: "234216312655",
+            appId: "1:234216312655:web:4d15a33823a52618073f3a"
+        };
+
+        let firestore = null;
+        let firebaseReady = false;
+        try {
+            if (firebaseConfig.apiKey) {
+                firebase.initializeApp(firebaseConfig);
+                firestore = firebase.firestore();
+                firebaseReady = true;
+            } else {
+                console.warn('⚠️ Firebase غير مُعَدّ. عدّل firebaseConfig في الكود لمشاركة البيانات بين المستخدمين. حاليًا يتم استخدام التخزين المحلي.');
+            }
+        } catch (err) {
+            console.error('فشل تهيئة Firebase:', err);
+        }
+
+        // ========================================
+        // Data Manager (Firestore + localStorage fallback)
+        // ========================================
+
         class DataManager {
             constructor() {
+                this.clients = [];
+                this.transactions = [];
+                this.invoices = [];
+                this.cases = [];
+                this.settlements = [];
+                this.files = [];
+                this.users = [];
+                this.collections = ['clients', 'transactions', 'invoices', 'cases', 'settlements', 'files', 'users'];
+                this.unsubscribers = [];
+            }
+
+            init() {
+                if (firebaseReady) {
+                    this.initFirestore();
+                } else {
+                    this.initLocal();
+                }
+            }
+
+            initFirestore() {
+                this.collections.forEach(name => {
+                    const unsub = firestore.collection(name).onSnapshot(snapshot => {
+                        this[name] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        renderAfterChange(name);
+                    }, err => {
+                        console.error(`خطأ في الاستماع إلى ${name}:`, err);
+                    });
+                    this.unsubscribers.push(unsub);
+                });
+            }
+
+            initLocal() {
                 this.clients = JSON.parse(localStorage.getItem('clients')) || [];
                 this.transactions = JSON.parse(localStorage.getItem('transactions')) || [];
                 this.invoices = JSON.parse(localStorage.getItem('invoices')) || [];
                 this.cases = JSON.parse(localStorage.getItem('cases')) || [];
                 this.settlements = JSON.parse(localStorage.getItem('settlements')) || [];
                 this.files = JSON.parse(localStorage.getItem('files')) || [];
-                this.users = JSON.parse(localStorage.getItem('users')) || this.getDefaultUsers();
+                this.users = JSON.parse(localStorage.getItem('users')) || [];
+                renderAfterChange();
             }
 
-            getDefaultUsers() {
-                return [
-                    { id: 1, name: 'محمد علي', email: 'admin@system.com', role: 'مدير', status: 'نشط' },
-                    { id: 2, name: 'فاطمة محمود', email: 'accountant@system.com', role: 'محاسب', status: 'نشط' }
-                ];
+            saveLocal() {
+                if (firebaseReady) return;
+                this.collections.forEach(name => {
+                    localStorage.setItem(name, JSON.stringify(this[name]));
+                });
             }
 
-            save() {
-                localStorage.setItem('clients', JSON.stringify(this.clients));
-                localStorage.setItem('transactions', JSON.stringify(this.transactions));
-                localStorage.setItem('invoices', JSON.stringify(this.invoices));
-                localStorage.setItem('cases', JSON.stringify(this.cases));
-                localStorage.setItem('settlements', JSON.stringify(this.settlements));
-                localStorage.setItem('files', JSON.stringify(this.files));
-                localStorage.setItem('users', JSON.stringify(this.users));
+            async add(collection, data) {
+                if (firebaseReady) {
+                    await firestore.collection(collection).add(data);
+                } else {
+                    const item = { id: String(Date.now()), ...data };
+                    this[collection].push(item);
+                    this.saveLocal();
+                    renderAfterChange(collection);
+                }
+            }
+
+            async update(collection, id, data) {
+                if (firebaseReady) {
+                    await firestore.collection(collection).doc(id).set(data, { merge: true });
+                } else {
+                    const idx = this[collection].findIndex(x => x.id == id);
+                    if (idx >= 0) this[collection][idx] = { id, ...data };
+                    this.saveLocal();
+                    renderAfterChange(collection);
+                }
+            }
+
+            async remove(collection, id) {
+                if (firebaseReady) {
+                    await firestore.collection(collection).doc(id).delete();
+                } else {
+                    this[collection] = this[collection].filter(x => x.id != id);
+                    this.saveLocal();
+                    renderAfterChange(collection);
+                }
             }
         }
 
         const db = new DataManager();
+
+        // ========================================
+        // Re-rendering after data changes
+        // ========================================
+
+        function renderAfterChange(collection) {
+            // Update sidebar badges and dashboard counts every time
+            const elClients = document.getElementById('clientsCount');
+            if (elClients) elClients.textContent = db.clients.length;
+            const elTrans = document.getElementById('transactionsCount');
+            if (elTrans) elTrans.textContent = db.transactions.length;
+            const elInv = document.getElementById('invoicesCount');
+            if (elInv) elInv.textContent = db.invoices.length;
+            const elCases = document.getElementById('casesCount');
+            if (elCases) elCases.textContent = db.cases.length;
+            const elSet = document.getElementById('settlementsCount');
+            if (elSet) elSet.textContent = db.settlements.length;
+            const elFiles = document.getElementById('filesCount');
+            if (elFiles) elFiles.textContent = db.files.length;
+
+            // Refresh table of the changed collection (or all if unspecified)
+            const renderers = {
+                clients: () => { if (document.querySelector('#clientsTable tbody')) loadClients(); updateClientSelects(); },
+                transactions: () => { if (document.querySelector('#transactionsTable tbody')) loadTransactions(); },
+                invoices: () => { if (document.querySelector('#invoicesTable tbody')) loadInvoices(); },
+                cases: () => { if (document.querySelector('#casesTable tbody')) loadCases(); },
+                settlements: () => { if (document.querySelector('#settlementsTable tbody')) loadSettlements(); },
+                files: () => { if (document.querySelector('#filesTable tbody')) loadFiles(); },
+                users: () => { if (document.querySelector('#usersTable tbody')) loadUsers(); }
+            };
+
+            if (collection && renderers[collection]) {
+                renderers[collection]();
+            } else {
+                Object.values(renderers).forEach(fn => fn());
+            }
+
+            if (typeof updateDashboard === 'function') updateDashboard();
+        }
 
         // ========================================
         // Navigation
@@ -1513,12 +1643,11 @@
             openModal('clientModal');
         }
 
-        function saveClient(event) {
+        async function saveClient(event) {
             event.preventDefault();
-            
+
             const id = document.getElementById('clientId').value;
             const client = {
-                id: id || Date.now(),
                 name: document.getElementById('clientName').value,
                 email: document.getElementById('clientEmail').value,
                 phone: document.getElementById('clientPhone').value,
@@ -1526,23 +1655,22 @@
                 status: document.getElementById('clientStatus').value
             };
 
-            if (id) {
-                const index = db.clients.findIndex(c => c.id == id);
-                db.clients[index] = client;
-            } else {
-                db.clients.push(client);
+            try {
+                if (id) {
+                    await db.update('clients', id, client);
+                } else {
+                    await db.add('clients', client);
+                }
+                showAlert('clientsAlert', 'تم حفظ العميل بنجاح');
+                closeModal('clientModal');
+            } catch (err) {
+                showAlert('clientsAlert', 'خطأ في الحفظ: ' + err.message);
             }
-
-            db.save();
-            showAlert('clientsAlert', 'تم حفظ العميل بنجاح');
-            closeModal('clientModal');
-            loadClients();
-            updateClientSelects();
-            updateDashboard();
         }
 
         function loadClients() {
             const tbody = document.querySelector('#clientsTable tbody');
+            if (!tbody) return;
             tbody.innerHTML = '';
 
             db.clients.forEach(client => {
@@ -1554,10 +1682,10 @@
                     <td>${client.bank || '-'}</td>
                     <td><span class="status-badge ${client.status === 'نشط' ? 'status-active' : 'status-pending'}">${client.status}</span></td>
                     <td>
-                        <button class="btn btn-primary btn-small" onclick="editClient(${client.id})">
+                        <button class="btn btn-primary btn-small" onclick="editClient('${client.id}')">
                             <i class="fas fa-edit"></i>
                         </button>
-                        <button class="btn btn-danger btn-small" onclick="deleteClient(${client.id})">
+                        <button class="btn btn-danger btn-small" onclick="deleteClient('${client.id}')">
                             <i class="fas fa-trash"></i>
                         </button>
                     </td>
@@ -1580,14 +1708,14 @@
             openModal('clientModal');
         }
 
-        function deleteClient(id) {
+        async function deleteClient(id) {
             if (confirm('هل تريد حذف هذا العميل؟')) {
-                db.clients = db.clients.filter(c => c.id != id);
-                db.save();
-                showAlert('clientsAlert', 'تم حذف العميل');
-                loadClients();
-                updateClientSelects();
-                updateDashboard();
+                try {
+                    await db.remove('clients', id);
+                    showAlert('clientsAlert', 'تم حذف العميل');
+                } catch (err) {
+                    showAlert('clientsAlert', 'خطأ في الحذف: ' + err.message);
+                }
             }
         }
 
@@ -1614,51 +1742,50 @@
             openModal('transactionModal');
         }
 
-        function saveTransaction(event) {
+        async function saveTransaction(event) {
             event.preventDefault();
 
             const id = document.getElementById('transactionId').value;
             const transaction = {
-                id: id || Date.now(),
                 clientId: document.getElementById('transactionClient').value,
                 amount: parseFloat(document.getElementById('transactionAmount').value),
                 type: document.getElementById('transactionType').value,
                 date: document.getElementById('transactionDate').value
             };
 
-            if (id) {
-                const index = db.transactions.findIndex(t => t.id == id);
-                db.transactions[index] = transaction;
-            } else {
-                db.transactions.push(transaction);
+            try {
+                if (id) {
+                    await db.update('transactions', id, transaction);
+                } else {
+                    await db.add('transactions', transaction);
+                }
+                showAlert('transactionsAlert', 'تم حفظ العملية بنجاح');
+                closeModal('transactionModal');
+            } catch (err) {
+                showAlert('transactionsAlert', 'خطأ في الحفظ: ' + err.message);
             }
-
-            db.save();
-            showAlert('transactionsAlert', 'تم حفظ العملية بنجاح');
-            closeModal('transactionModal');
-            loadTransactions();
-            updateDashboard();
         }
 
         function loadTransactions() {
             const tbody = document.querySelector('#transactionsTable tbody');
+            if (!tbody) return;
             tbody.innerHTML = '';
 
             db.transactions.forEach(trans => {
                 const client = db.clients.find(c => c.id == trans.clientId);
                 const row = tbody.insertRow();
                 row.innerHTML = `
-                    <td>TRN-${trans.id}</td>
+                    <td>TRN-${String(trans.id).substring(0, 8)}</td>
                     <td>${client ? client.name : '-'}</td>
                     <td>${trans.amount.toFixed(2)} ر.س</td>
                     <td><span class="status-badge ${trans.type === 'دخل' ? 'status-active' : 'status-danger'}">${trans.type}</span></td>
                     <td>${trans.date}</td>
                     <td><span class="status-badge status-completed">مقبولة</span></td>
                     <td>
-                        <button class="btn btn-primary btn-small" onclick="editTransaction(${trans.id})">
+                        <button class="btn btn-primary btn-small" onclick="editTransaction('${trans.id}')">
                             <i class="fas fa-edit"></i>
                         </button>
-                        <button class="btn btn-danger btn-small" onclick="deleteTransaction(${trans.id})">
+                        <button class="btn btn-danger btn-small" onclick="deleteTransaction('${trans.id}')">
                             <i class="fas fa-trash"></i>
                         </button>
                     </td>
@@ -1680,13 +1807,14 @@
             openModal('transactionModal');
         }
 
-        function deleteTransaction(id) {
+        async function deleteTransaction(id) {
             if (confirm('هل تريد حذف هذه العملية؟')) {
-                db.transactions = db.transactions.filter(t => t.id != id);
-                db.save();
-                showAlert('transactionsAlert', 'تم حذف العملية');
-                loadTransactions();
-                updateDashboard();
+                try {
+                    await db.remove('transactions', id);
+                    showAlert('transactionsAlert', 'تم حذف العملية');
+                } catch (err) {
+                    showAlert('transactionsAlert', 'خطأ في الحذف: ' + err.message);
+                }
             }
         }
 
@@ -1703,50 +1831,49 @@
             openModal('invoiceModal');
         }
 
-        function saveInvoice(event) {
+        async function saveInvoice(event) {
             event.preventDefault();
 
             const id = document.getElementById('invoiceId').value;
             const invoice = {
-                id: id || Date.now(),
                 clientId: document.getElementById('invoiceClient').value,
                 amount: parseFloat(document.getElementById('invoiceAmount').value),
                 date: document.getElementById('invoiceDate').value,
                 status: document.getElementById('invoiceStatus').value
             };
 
-            if (id) {
-                const index = db.invoices.findIndex(i => i.id == id);
-                db.invoices[index] = invoice;
-            } else {
-                db.invoices.push(invoice);
+            try {
+                if (id) {
+                    await db.update('invoices', id, invoice);
+                } else {
+                    await db.add('invoices', invoice);
+                }
+                showAlert('invoicesAlert', 'تم حفظ الفاتورة بنجاح');
+                closeModal('invoiceModal');
+            } catch (err) {
+                showAlert('invoicesAlert', 'خطأ في الحفظ: ' + err.message);
             }
-
-            db.save();
-            showAlert('invoicesAlert', 'تم حفظ الفاتورة بنجاح');
-            closeModal('invoiceModal');
-            loadInvoices();
-            updateDashboard();
         }
 
         function loadInvoices() {
             const tbody = document.querySelector('#invoicesTable tbody');
+            if (!tbody) return;
             tbody.innerHTML = '';
 
             db.invoices.forEach(inv => {
                 const client = db.clients.find(c => c.id == inv.clientId);
                 const row = tbody.insertRow();
                 row.innerHTML = `
-                    <td>INV-${inv.id}</td>
+                    <td>INV-${String(inv.id).substring(0, 8)}</td>
                     <td>${client ? client.name : '-'}</td>
                     <td>${inv.amount.toFixed(2)} ر.س</td>
                     <td>${inv.date}</td>
                     <td><span class="status-badge status-${inv.status === 'مدفوعة' ? 'completed' : 'pending'}">${inv.status}</span></td>
                     <td>
-                        <button class="btn btn-primary btn-small" onclick="editInvoice(${inv.id})">
+                        <button class="btn btn-primary btn-small" onclick="editInvoice('${inv.id}')">
                             <i class="fas fa-edit"></i>
                         </button>
-                        <button class="btn btn-danger btn-small" onclick="deleteInvoice(${inv.id})">
+                        <button class="btn btn-danger btn-small" onclick="deleteInvoice('${inv.id}')">
                             <i class="fas fa-trash"></i>
                         </button>
                     </td>
@@ -1768,13 +1895,14 @@
             openModal('invoiceModal');
         }
 
-        function deleteInvoice(id) {
+        async function deleteInvoice(id) {
             if (confirm('هل تريد حذف هذه الفاتورة؟')) {
-                db.invoices = db.invoices.filter(i => i.id != id);
-                db.save();
-                showAlert('invoicesAlert', 'تم حذف الفاتورة');
-                loadInvoices();
-                updateDashboard();
+                try {
+                    await db.remove('invoices', id);
+                    showAlert('invoicesAlert', 'تم حذف الفاتورة');
+                } catch (err) {
+                    showAlert('invoicesAlert', 'خطأ في الحذف: ' + err.message);
+                }
             }
         }
 
@@ -1792,12 +1920,11 @@
             openModal('caseModal');
         }
 
-        function saveCase(event) {
+        async function saveCase(event) {
             event.preventDefault();
 
             const id = document.getElementById('caseId').value;
             const caseData = {
-                id: id || Date.now(),
                 title: document.getElementById('caseTitle').value,
                 party1: document.getElementById('caseParty1').value,
                 party2: document.getElementById('caseParty2').value,
@@ -1805,38 +1932,38 @@
                 priority: document.getElementById('casePriority').value
             };
 
-            if (id) {
-                const index = db.cases.findIndex(c => c.id == id);
-                db.cases[index] = caseData;
-            } else {
-                db.cases.push(caseData);
+            try {
+                if (id) {
+                    await db.update('cases', id, caseData);
+                } else {
+                    await db.add('cases', caseData);
+                }
+                showAlert('casesAlert', 'تم حفظ القضية بنجاح');
+                closeModal('caseModal');
+            } catch (err) {
+                showAlert('casesAlert', 'خطأ في الحفظ: ' + err.message);
             }
-
-            db.save();
-            showAlert('casesAlert', 'تم حفظ القضية بنجاح');
-            closeModal('caseModal');
-            loadCases();
-            updateDashboard();
         }
 
         function loadCases() {
             const tbody = document.querySelector('#casesTable tbody');
+            if (!tbody) return;
             tbody.innerHTML = '';
 
             db.cases.forEach(caseData => {
                 const row = tbody.insertRow();
                 row.innerHTML = `
-                    <td>CASE-${caseData.id}</td>
+                    <td>CASE-${String(caseData.id).substring(0, 8)}</td>
                     <td>${caseData.title}</td>
                     <td>${caseData.party1}</td>
                     <td>${caseData.party2}</td>
                     <td><span class="status-badge status-${caseData.status === 'مغلقة' ? 'completed' : 'pending'}">${caseData.status}</span></td>
                     <td>${caseData.priority}</td>
                     <td>
-                        <button class="btn btn-primary btn-small" onclick="editCase(${caseData.id})">
+                        <button class="btn btn-primary btn-small" onclick="editCase('${caseData.id}')">
                             <i class="fas fa-edit"></i>
                         </button>
-                        <button class="btn btn-danger btn-small" onclick="deleteCase(${caseData.id})">
+                        <button class="btn btn-danger btn-small" onclick="deleteCase('${caseData.id}')">
                             <i class="fas fa-trash"></i>
                         </button>
                     </td>
@@ -1859,13 +1986,14 @@
             openModal('caseModal');
         }
 
-        function deleteCase(id) {
+        async function deleteCase(id) {
             if (confirm('هل تريد حذف هذه القضية؟')) {
-                db.cases = db.cases.filter(c => c.id != id);
-                db.save();
-                showAlert('casesAlert', 'تم حذف القضية');
-                loadCases();
-                updateDashboard();
+                try {
+                    await db.remove('cases', id);
+                    showAlert('casesAlert', 'تم حذف القضية');
+                } catch (err) {
+                    showAlert('casesAlert', 'خطأ في الحذف: ' + err.message);
+                }
             }
         }
 
@@ -1884,44 +2012,45 @@
             openModal('settlementModal');
         }
 
-        function saveSettlement(event) {
+        async function saveSettlement(event) {
             event.preventDefault();
 
             const id = document.getElementById('settlementId').value;
+            const total = parseFloat(document.getElementById('settlementTotal').value);
+            const paid = parseFloat(document.getElementById('settlementPaid').value);
             const settlement = {
-                id: id || Date.now(),
                 clientId: document.getElementById('settlementClient').value,
-                total: parseFloat(document.getElementById('settlementTotal').value),
-                paid: parseFloat(document.getElementById('settlementPaid').value),
-                remaining: parseFloat(document.getElementById('settlementTotal').value) - parseFloat(document.getElementById('settlementPaid').value),
+                total: total,
+                paid: paid,
+                remaining: total - paid,
                 date: document.getElementById('settlementDate').value,
                 status: document.getElementById('settlementStatus').value,
                 notes: document.getElementById('settlementNotes').value
             };
 
-            if (id) {
-                const index = db.settlements.findIndex(s => s.id == id);
-                db.settlements[index] = settlement;
-            } else {
-                db.settlements.push(settlement);
+            try {
+                if (id) {
+                    await db.update('settlements', id, settlement);
+                } else {
+                    await db.add('settlements', settlement);
+                }
+                showAlert('settlementsAlert', 'تم حفظ الإقرار بنجاح');
+                closeModal('settlementModal');
+            } catch (err) {
+                showAlert('settlementsAlert', 'خطأ في الحفظ: ' + err.message);
             }
-
-            db.save();
-            showAlert('settlementsAlert', 'تم حفظ الإقرار بنجاح');
-            closeModal('settlementModal');
-            loadSettlements();
-            updateDashboard();
         }
 
         function loadSettlements() {
             const tbody = document.querySelector('#settlementsTable tbody');
+            if (!tbody) return;
             tbody.innerHTML = '';
 
             db.settlements.forEach(settlement => {
                 const client = db.clients.find(c => c.id == settlement.clientId);
                 const row = tbody.insertRow();
                 row.innerHTML = `
-                    <td>SETL-${settlement.id}</td>
+                    <td>SETL-${String(settlement.id).substring(0, 8)}</td>
                     <td>${client ? client.name : '-'}</td>
                     <td>${settlement.total.toFixed(2)} ر.س</td>
                     <td>${settlement.paid.toFixed(2)} ر.س</td>
@@ -1929,13 +2058,13 @@
                     <td>${settlement.date}</td>
                     <td><span class="status-badge status-${settlement.status === 'مسدد' ? 'completed' : 'active'}">${settlement.status}</span></td>
                     <td>
-                        <button class="btn btn-primary btn-small" onclick="editSettlement(${settlement.id})">
+                        <button class="btn btn-primary btn-small" onclick="editSettlement('${settlement.id}')">
                             <i class="fas fa-edit"></i>
                         </button>
-                        <button class="btn btn-success btn-small" onclick="printSettlementCert(${settlement.id})">
+                        <button class="btn btn-success btn-small" onclick="printSettlementCert('${settlement.id}')">
                             <i class="fas fa-print"></i>
                         </button>
-                        <button class="btn btn-danger btn-small" onclick="deleteSettlement(${settlement.id})">
+                        <button class="btn btn-danger btn-small" onclick="deleteSettlement('${settlement.id}')">
                             <i class="fas fa-trash"></i>
                         </button>
                     </td>
@@ -1959,13 +2088,14 @@
             openModal('settlementModal');
         }
 
-        function deleteSettlement(id) {
+        async function deleteSettlement(id) {
             if (confirm('هل تريد حذف هذا الإقرار؟')) {
-                db.settlements = db.settlements.filter(s => s.id != id);
-                db.save();
-                showAlert('settlementsAlert', 'تم حذف الإقرار');
-                loadSettlements();
-                updateDashboard();
+                try {
+                    await db.remove('settlements', id);
+                    showAlert('settlementsAlert', 'تم حذف الإقرار');
+                } catch (err) {
+                    showAlert('settlementsAlert', 'خطأ في الحذف: ' + err.message);
+                }
             }
         }
 
@@ -1991,7 +2121,7 @@
                     <h1 style="text-align: center;">إقرار مخالصة</h1>
                     <hr>
                     <p style="text-align: right;">التاريخ: ${settlement.date}</p>
-                    <p style="text-align: right;">الرقم: SETL-${settlement.id}</p>
+                    <p style="text-align: right;">الرقم: SETL-${String(settlement.id).substring(0, 8)}</p>
                     <hr>
                     <p>أقر أنا <strong>${client.name}</strong></p>
                     <p>برقم الهوية: <strong>${client.phone}</strong></p>
@@ -2028,14 +2158,13 @@
             openModal('fileModal');
         }
 
-        function saveFile(event) {
+        async function saveFile(event) {
             event.preventDefault();
 
             const file = document.getElementById('fileInput').files[0];
             if (!file) return;
 
             const fileData = {
-                id: Date.now(),
                 name: file.name,
                 type: file.type,
                 size: (file.size / 1024).toFixed(2) + ' KB',
@@ -2043,17 +2172,18 @@
                 date: new Date().toISOString().split('T')[0]
             };
 
-            db.files.push(fileData);
-            db.save();
-
-            showAlert('filesAlert', 'تم رفع الملف بنجاح');
-            closeModal('fileModal');
-            loadFiles();
-            updateDashboard();
+            try {
+                await db.add('files', fileData);
+                showAlert('filesAlert', 'تم رفع الملف بنجاح');
+                closeModal('fileModal');
+            } catch (err) {
+                showAlert('filesAlert', 'خطأ في الرفع: ' + err.message);
+            }
         }
 
         function loadFiles() {
             const tbody = document.querySelector('#filesTable tbody');
+            if (!tbody) return;
             tbody.innerHTML = '';
 
             db.files.forEach(file => {
@@ -2064,7 +2194,7 @@
                     <td>${file.size}</td>
                     <td>${file.date}</td>
                     <td>
-                        <button class="btn btn-danger btn-small" onclick="deleteFile(${file.id})">
+                        <button class="btn btn-danger btn-small" onclick="deleteFile('${file.id}')">
                             <i class="fas fa-trash"></i>
                         </button>
                     </td>
@@ -2074,12 +2204,14 @@
             document.getElementById('filesCount').textContent = db.files.length;
         }
 
-        function deleteFile(id) {
+        async function deleteFile(id) {
             if (confirm('هل تريد حذف هذا الملف؟')) {
-                db.files = db.files.filter(f => f.id != id);
-                db.save();
-                showAlert('filesAlert', 'تم حذف الملف');
-                loadFiles();
+                try {
+                    await db.remove('files', id);
+                    showAlert('filesAlert', 'تم حذف الملف');
+                } catch (err) {
+                    showAlert('filesAlert', 'خطأ في الحذف: ' + err.message);
+                }
             }
         }
 
@@ -2096,33 +2228,33 @@
             openModal('userModal');
         }
 
-        function saveUser(event) {
+        async function saveUser(event) {
             event.preventDefault();
 
             const id = document.getElementById('userId').value;
             const user = {
-                id: id || Date.now(),
                 name: document.getElementById('userName').value,
                 email: document.getElementById('userEmail').value,
                 role: document.getElementById('userRole').value,
                 status: document.getElementById('userStatus').value
             };
 
-            if (id) {
-                const index = db.users.findIndex(u => u.id == id);
-                db.users[index] = user;
-            } else {
-                db.users.push(user);
+            try {
+                if (id) {
+                    await db.update('users', id, user);
+                } else {
+                    await db.add('users', user);
+                }
+                showAlert('usersAlert', 'تم حفظ المستخدم بنجاح');
+                closeModal('userModal');
+            } catch (err) {
+                showAlert('usersAlert', 'خطأ في الحفظ: ' + err.message);
             }
-
-            db.save();
-            showAlert('usersAlert', 'تم حفظ المستخدم بنجاح');
-            closeModal('userModal');
-            loadUsers();
         }
 
         function loadUsers() {
             const tbody = document.querySelector('#usersTable tbody');
+            if (!tbody) return;
             tbody.innerHTML = '';
 
             db.users.forEach(user => {
@@ -2133,10 +2265,10 @@
                     <td>${user.role}</td>
                     <td><span class="status-badge status-${user.status === 'نشط' ? 'active' : 'pending'}">${user.status}</span></td>
                     <td>
-                        <button class="btn btn-primary btn-small" onclick="editUser(${user.id})">
+                        <button class="btn btn-primary btn-small" onclick="editUser('${user.id}')">
                             <i class="fas fa-edit"></i>
                         </button>
-                        <button class="btn btn-danger btn-small" onclick="deleteUser(${user.id})">
+                        <button class="btn btn-danger btn-small" onclick="deleteUser('${user.id}')">
                             <i class="fas fa-trash"></i>
                         </button>
                     </td>
@@ -2156,12 +2288,14 @@
             openModal('userModal');
         }
 
-        function deleteUser(id) {
+        async function deleteUser(id) {
             if (confirm('هل تريد حذف هذا المستخدم؟')) {
-                db.users = db.users.filter(u => u.id != id);
-                db.save();
-                showAlert('usersAlert', 'تم حذف المستخدم');
-                loadUsers();
+                try {
+                    await db.remove('users', id);
+                    showAlert('usersAlert', 'تم حذف المستخدم');
+                } catch (err) {
+                    showAlert('usersAlert', 'خطأ في الحذف: ' + err.message);
+                }
             }
         }
 
@@ -2196,7 +2330,7 @@
                 const client = db.clients.find(c => c.id == trans.clientId);
                 const row = tbody.insertRow();
                 row.innerHTML = `
-                    <td>TRN-${trans.id}</td>
+                    <td>TRN-${String(trans.id).substring(0, 8)}</td>
                     <td>${client ? client.name : '-'}</td>
                     <td>${trans.amount.toFixed(2)} ر.س</td>
                     <td><span class="status-badge ${trans.type === 'دخل' ? 'status-active' : 'status-danger'}">${trans.type}</span></td>
@@ -2339,15 +2473,22 @@
         // ========================================
 
         document.addEventListener('DOMContentLoaded', function() {
-            updateClientSelects();
-            updateDashboard();
-            loadClients();
-            
+            // Start Firestore listeners (or fallback to localStorage)
+            db.init();
+
             // Set today's date for date inputs
             const today = new Date().toISOString().split('T')[0];
             document.querySelectorAll('input[type="date"]').forEach(input => {
                 if (!input.value) input.value = today;
             });
+
+            // Show a friendly banner if Firebase is not configured
+            if (!firebaseReady) {
+                const banner = document.createElement('div');
+                banner.style.cssText = 'background:#fef3c7;color:#92400e;padding:10px 16px;text-align:center;font-size:13px;border-bottom:1px solid #f59e0b;';
+                banner.innerHTML = '⚠️ <strong>Firebase غير مُعَدّ:</strong> البيانات تُحفظ محليًا فقط على هذا الجهاز. اضبط <code>firebaseConfig</code> في الكود لمشاركة البيانات بين جميع المستخدمين.';
+                document.body.insertBefore(banner, document.body.firstChild);
+            }
         });
     </script>
 </body>
