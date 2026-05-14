@@ -1671,6 +1671,16 @@
                 <div class="form-group" id="settlementInvoicesGroup">
                     <label>تطبيق المبلغ على فواتير محددة (اختياري)</label>
                     <small style="display:block;color:#666;font-size:11px;margin-bottom:8px;">حدّد الفواتير غير المسددة وحدّد المبلغ المُطبَّق على كل فاتورة. عند الحفظ، يتم تعليم الفواتير كمسددة جزئياً/كلياً تلقائياً.</small>
+                    <div id="settlementInvoiceToolbar" style="display:none;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+                        <button type="button" class="btn btn-primary btn-small" onclick="toggleAllSettlementInvoices(true)">
+                            <i class="fas fa-check-double"></i> تحديد الكل
+                        </button>
+                        <button type="button" class="btn btn-secondary btn-small" onclick="toggleAllSettlementInvoices(false)">
+                            <i class="fas fa-times"></i> إلغاء التحديد
+                        </button>
+                        <input type="text" id="settlementInvoiceSearch" placeholder="بحث في الفواتير..." oninput="filterSettlementInvoiceList()" style="flex:1;min-width:140px;padding:6px 10px;font-size:12px;">
+                        <span style="font-size:11px;color:#888;">المعروضة: <strong id="settlementInvoiceCount">0</strong></span>
+                    </div>
                     <div id="settlementInvoiceList" style="max-height: 200px; overflow-y: auto; border:1px solid #e5e5e5; border-radius:6px; padding: 8px; background:#fafafa;">
                         <p style="color:#888; font-size:12px; text-align:center; margin:10px 0;">اختر العميل لعرض فواتيره غير المسددة</p>
                     </div>
@@ -2648,6 +2658,8 @@
             // Reset invoice list
             const list = document.getElementById('settlementInvoiceList');
             if (list) list.innerHTML = '<p style="color:#888; font-size:12px; text-align:center; margin:10px 0;">اختر العميل لعرض فواتيره غير المسددة</p>';
+            const toolbar = document.getElementById('settlementInvoiceToolbar');
+            if (toolbar) toolbar.style.display = 'none';
             const at = document.getElementById('settlementAppliedTotal');
             if (at) at.textContent = '0.00';
             openModal('settlementModal');
@@ -2659,8 +2671,10 @@
             const clientId = isClient() ? currentUser.clientId : document.getElementById('settlementClient').value;
             const list = document.getElementById('settlementInvoiceList');
             if (!list) return;
+            const toolbar = document.getElementById('settlementInvoiceToolbar');
             if (!clientId) {
                 list.innerHTML = '<p style="color:#888; font-size:12px; text-align:center; margin:10px 0;">اختر العميل لعرض فواتيره غير المسددة</p>';
+                if (toolbar) toolbar.style.display = 'none';
                 return;
             }
             // Get unpaid invoices for this client (either as primary or counterparty)
@@ -2691,12 +2705,55 @@
                 </div>`;
             }).join('');
             list.innerHTML = rows;
+            // Show toolbar (select all / search) when there are invoices
+            if (toolbar) toolbar.style.display = invoices.length > 0 ? 'flex' : 'none';
+            const countEl = document.getElementById('settlementInvoiceCount');
+            if (countEl) countEl.textContent = invoices.length;
+            const searchEl = document.getElementById('settlementInvoiceSearch');
+            if (searchEl) searchEl.value = '';
             // Reset manual flags when list is rebuilt so auto-calc takes over
             const totalEl = document.getElementById('settlementTotal');
             const paidEl = document.getElementById('settlementPaid');
             if (totalEl) delete totalEl.dataset.manual;
             if (paidEl) delete paidEl.dataset.manual;
             recomputeSettlementTotals();
+        }
+
+        function toggleAllSettlementInvoices(checked) {
+            const list = document.getElementById('settlementInvoiceList');
+            if (!list) return;
+            // Only act on currently visible (non-filtered-out) rows
+            list.querySelectorAll('[data-invoice-id]').forEach(row => {
+                if (row.style.display === 'none') return;
+                const cb = row.querySelector('.settlement-inv-check');
+                const input = row.querySelector('.settlement-inv-amount');
+                if (!cb || !input) return;
+                cb.checked = checked;
+                if (checked) {
+                    input.disabled = false;
+                    input.value = row.dataset.remaining;
+                } else {
+                    input.disabled = true;
+                    input.value = '';
+                }
+            });
+            updateAppliedTotal();
+            recomputeSettlementTotals();
+        }
+
+        function filterSettlementInvoiceList() {
+            const q = (document.getElementById('settlementInvoiceSearch')?.value || '').trim().toLowerCase();
+            const list = document.getElementById('settlementInvoiceList');
+            if (!list) return;
+            let visible = 0;
+            list.querySelectorAll('[data-invoice-id]').forEach(row => {
+                const text = row.textContent.toLowerCase();
+                const show = !q || text.includes(q);
+                row.style.display = show ? '' : 'none';
+                if (show) visible++;
+            });
+            const countEl = document.getElementById('settlementInvoiceCount');
+            if (countEl) countEl.textContent = visible;
         }
 
         function onInvoiceCheckChange(checkbox) {
