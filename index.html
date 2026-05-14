@@ -1334,8 +1334,14 @@
                 <div class="page-header">
                     <h1><i class="fas fa-search-dollar"></i> المحقق المالي الجنائي</h1>
                     <div class="header-actions">
+                        <button class="btn btn-primary" onclick="openStatementUploadModal()">
+                            <i class="fas fa-upload"></i> رفع كشف للتحليل
+                        </button>
                         <button class="btn btn-primary" onclick="runInvestigator()">
                             <i class="fas fa-play"></i> تشغيل التحليل
+                        </button>
+                        <button class="btn btn-success" onclick="sendInvestigatorToAccountant()">
+                            <i class="fas fa-arrow-left"></i> إرسال للمحاسب
                         </button>
                         <button class="btn btn-secondary btn-small" onclick="exportInvestigatorPDF()">
                             <i class="fas fa-file-pdf"></i> تصدير PDF
@@ -1344,6 +1350,17 @@
                 </div>
 
                 <div id="investigatorAlert" class="alert alert-success"></div>
+
+                <div class="card" style="background:#fffbf0;border-right:4px solid #d4af37;padding:14px;">
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <i class="fas fa-route" style="color:#d4af37;font-size:18px;"></i>
+                        <strong style="color:#1a4d2e;">المسار: 1. المحقق</strong>
+                        <span style="color:#888;">←</span>
+                        <span style="color:#888;">2. المحاسب</span>
+                        <span style="color:#888;">←</span>
+                        <span style="color:#888;">3. المحامي (إقرار + إقفال)</span>
+                    </div>
+                </div>
 
                 <div class="filters" style="flex-wrap:wrap;">
                     <div class="filter-group">
@@ -1430,6 +1447,9 @@
                         <button class="btn btn-primary" onclick="runAccountant()">
                             <i class="fas fa-play"></i> حساب الأرصدة
                         </button>
+                        <button class="btn btn-success" onclick="sendAccountantToLawyer()">
+                            <i class="fas fa-arrow-left"></i> إرسال للمحامي (إنشاء إقرار)
+                        </button>
                         <button class="btn btn-secondary btn-small" onclick="exportAccountantPDF()">
                             <i class="fas fa-file-pdf"></i> تصدير PDF
                         </button>
@@ -1437,6 +1457,17 @@
                 </div>
 
                 <div id="accountantAlert" class="alert alert-success"></div>
+
+                <div class="card" style="background:#fffbf0;border-right:4px solid #d4af37;padding:14px;">
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <i class="fas fa-route" style="color:#d4af37;font-size:18px;"></i>
+                        <span style="color:#888;">1. المحقق</span>
+                        <span style="color:#888;">←</span>
+                        <strong style="color:#1a4d2e;">2. المحاسب</strong>
+                        <span style="color:#888;">←</span>
+                        <span style="color:#888;">3. المحامي (إقرار + إقفال)</span>
+                    </div>
+                </div>
 
                 <div class="filters" style="flex-wrap:wrap;">
                     <div class="filter-group">
@@ -1880,6 +1911,18 @@
                     <label>ملاحظات</label>
                     <textarea id="settlementNotes" rows="3"></textarea>
                 </div>
+
+                <div class="form-group" style="background:#fee2e2;border:1px solid #dc2626;border-radius:6px;padding:12px;">
+                    <label style="display:flex;align-items:center;gap:8px;color:#991b1b;cursor:pointer;margin-bottom:0;">
+                        <input type="checkbox" id="settlementLockFile" style="width:auto;margin:0;">
+                        <i class="fas fa-lock" style="color:#dc2626;"></i>
+                        <strong>إقفال الفواتير المرتبطة بعد الحفظ (Read-Only)</strong>
+                    </label>
+                    <small style="display:block;color:#7f1d1d;font-size:11px;margin-top:6px;">
+                        ⚠️ بعد إصدار هذا الإقرار، الفواتير المحددة لن تقبل أي تعديل. تُستخدم هذه الخاصية لإقفال القضية نهائياً.
+                    </small>
+                </div>
+
                 <div style="margin-top: 20px; display: flex; gap: 10px;">
                     <button type="submit" class="btn btn-primary">حفظ</button>
                     <button type="button" class="btn btn-secondary" onclick="closeModal('settlementModal')">إلغاء</button>
@@ -2593,6 +2636,14 @@
             event.preventDefault();
 
             const id = document.getElementById('invoiceId').value;
+            // Block editing locked invoices
+            if (id) {
+                const existing = db.invoices.find(i => i.id === id);
+                if (existing && existing.locked) {
+                    alert('🔒 هذه الفاتورة مقفلة ولا يمكن تعديلها. اطلب من المدير إعادة فتحها.');
+                    return;
+                }
+            }
             const amount = parseFloat(document.getElementById('invoiceAmount').value) || 0;
             const paid = parseFloat(document.getElementById('invoicePaid')?.value) || 0;
             const userStatus = document.getElementById('invoiceStatus').value;
@@ -2652,9 +2703,11 @@
                     const paid = Number(inv.paid) || 0;
                     const remaining = (typeof inv.remaining === 'number') ? inv.remaining : (amount - paid);
                     const statusClass = inv.status === 'مدفوعة' ? 'completed' : 'pending';
+                    const isLocked = inv.locked === true;
                     const row = tbody.insertRow();
+                    if (isLocked) row.style.background = '#fef2f2';
                     row.innerHTML = `
-                        <td>INV-${String(inv.id).substring(0, 8)}</td>
+                        <td>INV-${String(inv.id).substring(0, 8)} ${isLocked ? '<i class="fas fa-lock" style="color:#dc2626;margin-right:6px;" title="مقفل"></i>' : ''}</td>
                         <td>${client ? client.name : '-'}</td>
                         <td>${counter ? counter.name : '-'}</td>
                         <td>${amount.toFixed(2)} ر.س</td>
@@ -2662,12 +2715,16 @@
                         <td style="color:${remaining > 0 ? '#dc2626' : '#10b981'};font-weight:bold;">${remaining.toFixed(2)} ر.س</td>
                         <td>${inv.description || '-'}</td>
                         <td>${inv.date || '-'}</td>
-                        <td><span class="status-badge status-${statusClass}">${inv.status || '-'}</span></td>
+                        <td><span class="status-badge status-${statusClass}">${inv.status || '-'}</span>${isLocked ? ' <span class="status-badge status-danger">🔒 مقفل</span>' : ''}</td>
                         <td>
-                            <button class="btn btn-primary btn-small" onclick="editInvoice('${inv.id}')" title="تعديل"><i class="fas fa-edit"></i></button>
-                            <button class="btn btn-secondary btn-small" onclick="exportInvoicePDF('${inv.id}')" title="PDF"><i class="fas fa-file-pdf"></i></button>
-                            ${remaining > 0 ? `<button class="btn btn-success btn-small" onclick="createSettlementFromInvoice('${inv.id}')" title="إقرار بالمبلغ المتبقي"><i class="fas fa-file-signature"></i></button>` : ''}
-                            <button class="btn btn-danger btn-small" onclick="deleteInvoice('${inv.id}')" title="حذف"><i class="fas fa-trash"></i></button>
+                            ${isLocked
+                                ? `<button class="btn btn-secondary btn-small" onclick="exportInvoicePDF('${inv.id}')" title="PDF"><i class="fas fa-file-pdf"></i></button>
+                                   ${isAdmin() ? `<button class="btn btn-warning btn-small" onclick="unlockInvoice('${inv.id}')" title="إعادة فتح" style="background:#f59e0b;color:white;"><i class="fas fa-lock-open"></i></button>` : ''}`
+                                : `<button class="btn btn-primary btn-small" onclick="editInvoice('${inv.id}')" title="تعديل"><i class="fas fa-edit"></i></button>
+                                   <button class="btn btn-secondary btn-small" onclick="exportInvoicePDF('${inv.id}')" title="PDF"><i class="fas fa-file-pdf"></i></button>
+                                   ${remaining > 0 ? `<button class="btn btn-success btn-small" onclick="createSettlementFromInvoice('${inv.id}')" title="إقرار بالمبلغ المتبقي"><i class="fas fa-file-signature"></i></button>` : ''}
+                                   <button class="btn btn-danger btn-small" onclick="deleteInvoice('${inv.id}')" title="حذف"><i class="fas fa-trash"></i></button>`
+                            }
                         </td>
                     `;
                 });
@@ -2700,6 +2757,11 @@
         }
 
         async function deleteInvoice(id) {
+            const existing = db.invoices.find(i => i.id === id);
+            if (existing && existing.locked) {
+                alert('🔒 هذه الفاتورة مقفلة ولا يمكن حذفها. اطلب من المدير إعادة فتحها أولاً.');
+                return;
+            }
             if (confirm('هل تريد حذف هذه الفاتورة؟')) {
                 try {
                     await db.remove('invoices', id);
@@ -3088,6 +3150,7 @@
                 }
 
                 // Update linked invoices' paid amounts (only for new settlements, not edits)
+                const shouldLock = document.getElementById('settlementLockFile')?.checked;
                 if (!id && linkedInvoices.length > 0 && firebaseReady) {
                     for (const link of linkedInvoices) {
                         const inv = db.invoices.find(i => i.id === link.invoiceId);
@@ -3096,17 +3159,25 @@
                         const amount = Number(inv.amount) || 0;
                         const newRemaining = amount - newPaid;
                         const newStatus = computeInvoiceStatus(amount, newPaid);
-                        await firestore.collection('invoices').doc(link.invoiceId).update({
+                        const updateData = {
                             paid: newPaid,
                             remaining: newRemaining,
                             status: newStatus
-                        });
+                        };
+                        if (shouldLock) {
+                            updateData.locked = true;
+                            updateData.lockedAt = firebase.firestore.FieldValue.serverTimestamp();
+                            updateData.lockedBy = (currentUser && currentUser.uid) || '';
+                        }
+                        await firestore.collection('invoices').doc(link.invoiceId).update(updateData);
                     }
                 }
 
-                showAlert('settlementsAlert', linkedInvoices.length > 0
+                let msg = linkedInvoices.length > 0
                     ? `تم حفظ الإقرار وتحديث ${linkedInvoices.length} فاتورة`
-                    : 'تم حفظ الإقرار بنجاح');
+                    : 'تم حفظ الإقرار بنجاح';
+                if (shouldLock && linkedInvoices.length > 0) msg += ` 🔒 (تم إقفال ${linkedInvoices.length} فاتورة)`;
+                showAlert('settlementsAlert', msg);
                 closeModal('settlementModal');
             } catch (err) {
                 showAlert('settlementsAlert', 'خطأ في الحفظ: ' + err.message);
@@ -3857,6 +3928,129 @@
             }
 
             showAlert('investigatorAlert', `اكتمل التحليل: ${flagged.length} عملية مشبوهة من أصل ${invoices.length}`);
+        }
+
+        // ========================================
+        // Workflow: Investigator → Accountant → Lawyer
+        // ========================================
+        function sendInvestigatorToAccountant() {
+            // Pass current filters to Accountant
+            const clientId = document.getElementById('investigatorClient')?.value || '';
+            const counterId = document.getElementById('investigatorCounterparty')?.value || '';
+            const dateFrom = document.getElementById('investigatorDateFrom')?.value || '';
+            const dateTo = document.getElementById('investigatorDateTo')?.value || '';
+
+            // Switch to accountant section
+            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.nav-link').forEach(a => a.classList.remove('active'));
+            document.getElementById('accountant').classList.add('active');
+            const navAcc = Array.from(document.querySelectorAll('.nav-link')).find(a => a.getAttribute('onclick')?.includes("'accountant'"));
+            if (navAcc) navAcc.classList.add('active');
+
+            // Apply same filters
+            populateAccountantFilters();
+            setTimeout(() => {
+                if (clientId) document.getElementById('accountantClient').value = clientId;
+                if (counterId) document.getElementById('accountantCounterparty').value = counterId;
+                if (dateFrom) document.getElementById('accountantDateFrom').value = dateFrom;
+                if (dateTo) document.getElementById('accountantDateTo').value = dateTo;
+                runAccountant();
+                showAlert('accountantAlert', '✓ تم استلام البيانات من المحقق — راجع الأرصدة ثم أرسل للمحامي');
+            }, 100);
+        }
+
+        function sendAccountantToLawyer() {
+            const filterClient = document.getElementById('accountantClient')?.value || '';
+            const filterCounter = document.getElementById('accountantCounterparty')?.value || '';
+            const dateFrom = document.getElementById('accountantDateFrom')?.value || '';
+            const dateTo = document.getElementById('accountantDateTo')?.value || '';
+
+            const inRange = (d) => {
+                if (!dateFrom && !dateTo) return true;
+                if (!d) return false;
+                if (dateFrom && d < dateFrom) return false;
+                if (dateTo && d > dateTo) return false;
+                return true;
+            };
+
+            const invoices = db.invoices.filter(inv => {
+                if (filterClient && inv.clientId !== filterClient && inv.counterpartyClientId !== filterClient) return false;
+                if (filterCounter && inv.clientId !== filterCounter && inv.counterpartyClientId !== filterCounter) return false;
+                if (!inRange(inv.date)) return false;
+                return true;
+            });
+
+            if (invoices.length === 0) {
+                alert('لا توجد فواتير في نطاق الفلتر — لا يوجد ما يُرسل للمحامي');
+                return;
+            }
+
+            let totalDebit = 0, totalCredit = 0;
+            const linked = [];
+            invoices.forEach(inv => {
+                const amount = Number(inv.amount) || 0;
+                const paid = Number(inv.paid) || 0;
+                const remaining = amount - paid;
+                totalDebit += amount;
+                totalCredit += paid;
+                if (remaining > 0.01) linked.push({ invoiceId: inv.id, remaining });
+            });
+            const netRemaining = totalDebit - totalCredit;
+
+            if (netRemaining <= 0.01) {
+                alert('لا يوجد رصيد متبقٍ للإقرار — جميع الفواتير مسددة');
+                return;
+            }
+
+            // Open settlement modal pre-filled
+            openSettlementModal();
+            setTimeout(() => {
+                if (filterClient) {
+                    document.getElementById('settlementClient').value = filterClient;
+                    refreshSettlementInvoiceList();
+                }
+                setTimeout(() => {
+                    // Auto-select all unpaid invoices for this client
+                    toggleAllSettlementInvoices(true);
+                    document.getElementById('settlementNotes').value =
+                        `إقرار صادر من مسار المحاسب القانوني\n` +
+                        `إجمالي الفواتير: ${invoices.length}\n` +
+                        `إجمالي المدين: ${totalDebit.toFixed(2)} ر.س\n` +
+                        `إجمالي الدائن: ${totalCredit.toFixed(2)} ر.س\n` +
+                        `الرصيد الصافي المتبقي: ${netRemaining.toFixed(2)} ر.س`;
+                }, 200);
+            }, 100);
+        }
+
+        // ========================================
+        // Lock invoices / case after settlement
+        // ========================================
+        async function lockInvoices(invoiceIds) {
+            if (!firebaseReady || invoiceIds.length === 0) return;
+            const batch = firestore.batch();
+            invoiceIds.forEach(id => {
+                const ref = firestore.collection('invoices').doc(id);
+                batch.set(ref, {
+                    locked: true,
+                    lockedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    lockedBy: (currentUser && currentUser.uid) || ''
+                }, { merge: true });
+            });
+            await batch.commit();
+        }
+
+        async function unlockInvoice(invoiceId) {
+            if (!confirm('إعادة فتح الفاتورة تسمح بتعديلها مجدداً. هل تريد المتابعة؟')) return;
+            if (!firebaseReady) return;
+            try {
+                await firestore.collection('invoices').doc(invoiceId).update({
+                    locked: false,
+                    lockedAt: firebase.firestore.FieldValue.delete()
+                });
+                showAlert('invoicesAlert', 'تم إعادة فتح الفاتورة');
+            } catch (err) {
+                alert('خطأ: ' + err.message);
+            }
         }
 
         function exportInvestigatorPDF() {
