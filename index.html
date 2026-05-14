@@ -926,6 +926,17 @@
             </div>
 
             <div class="sidebar-section admin-only">
+                <div class="sidebar-title">التحليلات</div>
+                <ul class="sidebar-menu">
+                    <li><a onclick="switchSection('investigator')" class="nav-link">
+                        <i class="fas fa-search-dollar"></i> المحقق المالي
+                    </a></li>
+                    <li><a onclick="switchSection('accountant')" class="nav-link">
+                        <i class="fas fa-calculator"></i> المحاسب القانوني
+                    </a></li>
+                </ul>
+            </div>
+            <div class="sidebar-section admin-only">
                 <div class="sidebar-title">الإدارة</div>
                 <ul class="sidebar-menu">
                     <li><a onclick="switchSection('users')" class="nav-link">
@@ -1318,6 +1329,182 @@
             </section>
 
             <!-- Reports Section -->
+            <!-- Investigator Section -->
+            <section id="investigator" class="section">
+                <div class="page-header">
+                    <h1><i class="fas fa-search-dollar"></i> المحقق المالي الجنائي</h1>
+                    <div class="header-actions">
+                        <button class="btn btn-primary" onclick="runInvestigator()">
+                            <i class="fas fa-play"></i> تشغيل التحليل
+                        </button>
+                        <button class="btn btn-secondary btn-small" onclick="exportInvestigatorPDF()">
+                            <i class="fas fa-file-pdf"></i> تصدير PDF
+                        </button>
+                    </div>
+                </div>
+
+                <div id="investigatorAlert" class="alert alert-success"></div>
+
+                <div class="filters" style="flex-wrap:wrap;">
+                    <div class="filter-group">
+                        <label>العميل:</label>
+                        <select id="investigatorClient" onchange="runInvestigator()">
+                            <option value="">— الكل —</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>الخصم:</label>
+                        <select id="investigatorCounterparty" onchange="runInvestigator()">
+                            <option value="">— الكل —</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>من تاريخ:</label>
+                        <input type="date" id="investigatorDateFrom" onchange="runInvestigator()">
+                    </div>
+                    <div class="filter-group">
+                        <label>إلى تاريخ:</label>
+                        <input type="date" id="investigatorDateTo" onchange="runInvestigator()">
+                    </div>
+                    <div class="filter-group">
+                        <label>عتبة الاشتباه (ر.س):</label>
+                        <input type="number" id="investigatorThreshold" value="30000" step="1000" min="0" onchange="runInvestigator()">
+                    </div>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">العمليات المحللة</div>
+                        <div class="stat-value" id="investAnalyzed">0</div>
+                    </div>
+                    <div class="stat-card" style="border-top-color: #fbbf24;">
+                        <div class="stat-label">منخفضة الشبهة</div>
+                        <div class="stat-value" id="investLow" style="color:#92400e;">0</div>
+                    </div>
+                    <div class="stat-card" style="border-top-color: #f59e0b;">
+                        <div class="stat-label">متوسطة</div>
+                        <div class="stat-value" id="investMed" style="color:#b45309;">0</div>
+                    </div>
+                    <div class="stat-card" style="border-top-color: #dc2626;">
+                        <div class="stat-label">عالية</div>
+                        <div class="stat-value" id="investHigh" style="color:#991b1b;">0</div>
+                    </div>
+                    <div class="stat-card" style="border-top-color: #7f1d1d;">
+                        <div class="stat-label">حرجة</div>
+                        <div class="stat-value" id="investCritical" style="color:#7f1d1d;">0</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-exclamation-triangle"></i> العمليات المشبوهة</h2>
+                        <span style="font-size:12px;color:#888;" id="investCount"></span>
+                    </div>
+                    <div class="table-wrapper">
+                        <table id="investigatorTable">
+                            <thead>
+                                <tr>
+                                    <th>الخطورة</th>
+                                    <th>التاريخ</th>
+                                    <th>العميل</th>
+                                    <th>الخصم</th>
+                                    <th>المرجع</th>
+                                    <th>البيان</th>
+                                    <th>المبلغ (مدين)</th>
+                                    <th>المدفوع</th>
+                                    <th>المتبقي</th>
+                                    <th>الإجراءات</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Accountant Section -->
+            <section id="accountant" class="section">
+                <div class="page-header">
+                    <h1><i class="fas fa-calculator"></i> المحاسب القانوني</h1>
+                    <div class="header-actions">
+                        <button class="btn btn-primary" onclick="runAccountant()">
+                            <i class="fas fa-play"></i> حساب الأرصدة
+                        </button>
+                        <button class="btn btn-secondary btn-small" onclick="exportAccountantPDF()">
+                            <i class="fas fa-file-pdf"></i> تصدير PDF
+                        </button>
+                    </div>
+                </div>
+
+                <div id="accountantAlert" class="alert alert-success"></div>
+
+                <div class="filters" style="flex-wrap:wrap;">
+                    <div class="filter-group">
+                        <label>العميل:</label>
+                        <select id="accountantClient" onchange="runAccountant()">
+                            <option value="">— الكل —</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>الخصم:</label>
+                        <select id="accountantCounterparty" onchange="runAccountant()">
+                            <option value="">— الكل —</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>من تاريخ:</label>
+                        <input type="date" id="accountantDateFrom" onchange="runAccountant()">
+                    </div>
+                    <div class="filter-group">
+                        <label>إلى تاريخ:</label>
+                        <input type="date" id="accountantDateTo" onchange="runAccountant()">
+                    </div>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">إجمالي الفواتير</div>
+                        <div class="stat-value" id="acctInvoicesCount">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">إجمالي المدين</div>
+                        <div class="stat-value" id="acctTotalDebit" style="color:#1a4d2e;">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">إجمالي الدائن (المدفوع)</div>
+                        <div class="stat-value" id="acctTotalCredit" style="color:#10b981;">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">الفرق الصافي (المتبقي)</div>
+                        <div class="stat-value" id="acctNetBalance" style="color:#dc2626;">0</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-balance-scale"></i> الأرصدة المفصلة (العميل × الخصم)</h2>
+                        <span style="font-size:12px;color:#888;" id="acctCount"></span>
+                    </div>
+                    <div class="table-wrapper">
+                        <table id="accountantTable">
+                            <thead>
+                                <tr>
+                                    <th>العميل</th>
+                                    <th>الخصم</th>
+                                    <th>عدد الفواتير</th>
+                                    <th>إجمالي المدين</th>
+                                    <th>إجمالي الدائن</th>
+                                    <th>الرصيد</th>
+                                    <th>الحالة</th>
+                                    <th>الإجراءات</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
             <section id="reports" class="section">
                 <div class="page-header">
                     <h1><i class="fas fa-chart-bar"></i> التقارير المتقدمة</h1>
@@ -2114,6 +2301,12 @@
                 loadUsers();
             } else if (sectionId === 'reports') {
                 loadReports();
+            } else if (sectionId === 'investigator') {
+                populateInvestigatorFilters();
+                runInvestigator();
+            } else if (sectionId === 'accountant') {
+                populateAccountantFilters();
+                runAccountant();
             }
         }
 
@@ -3555,6 +3748,311 @@
             w.document.write(header + section.innerHTML + '</body></html>');
             w.document.close();
             setTimeout(() => w.print(), 250);
+        }
+
+        // ========================================
+        // المحقق المالي الجنائي (Forensic Investigator)
+        // ========================================
+        function populateInvestigatorFilters() {
+            ['investigatorClient', 'investigatorCounterparty'].forEach(id => {
+                const sel = document.getElementById(id);
+                if (!sel) return;
+                const current = sel.value;
+                sel.innerHTML = '<option value="">— الكل —</option>';
+                db.clients.forEach(c => {
+                    const o = document.createElement('option');
+                    o.value = c.id; o.textContent = c.name;
+                    sel.appendChild(o);
+                });
+                if (current) sel.value = current;
+            });
+        }
+
+        function classifySeverity(amount, threshold) {
+            if (amount >= threshold * 4) return { level: 'critical', label: 'حرجة', color: '#7f1d1d', bg: '#fef2f2' };
+            if (amount >= threshold * 2) return { level: 'high', label: 'عالية', color: '#991b1b', bg: '#fee2e2' };
+            if (amount >= threshold) return { level: 'medium', label: 'متوسطة', color: '#b45309', bg: '#fef3c7' };
+            if (amount >= threshold / 3) return { level: 'low', label: 'منخفضة', color: '#92400e', bg: '#fffbeb' };
+            return null;
+        }
+
+        function runInvestigator() {
+            populateInvestigatorFilters();
+
+            const filterClient = document.getElementById('investigatorClient')?.value || '';
+            const filterCounter = document.getElementById('investigatorCounterparty')?.value || '';
+            const dateFrom = document.getElementById('investigatorDateFrom')?.value || '';
+            const dateTo = document.getElementById('investigatorDateTo')?.value || '';
+            const threshold = parseFloat(document.getElementById('investigatorThreshold')?.value) || 30000;
+
+            const inRange = (d) => {
+                if (!dateFrom && !dateTo) return true;
+                if (!d) return false;
+                if (dateFrom && d < dateFrom) return false;
+                if (dateTo && d > dateTo) return false;
+                return true;
+            };
+
+            const invoices = db.invoices.filter(inv => {
+                if (filterClient && inv.clientId !== filterClient && inv.counterpartyClientId !== filterClient) return false;
+                if (filterCounter && inv.clientId !== filterCounter && inv.counterpartyClientId !== filterCounter) return false;
+                if (!inRange(inv.date)) return false;
+                return true;
+            });
+
+            // Classify each invoice by amount
+            const flagged = [];
+            const counters = { low: 0, medium: 0, high: 0, critical: 0 };
+            invoices.forEach(inv => {
+                const amount = Number(inv.amount) || 0;
+                const sev = classifySeverity(amount, threshold);
+                if (!sev) return;
+                counters[sev.level]++;
+                flagged.push({ inv, sev, amount });
+            });
+
+            // Sort by severity then amount
+            const severityRank = { critical: 4, high: 3, medium: 2, low: 1 };
+            flagged.sort((a, b) => (severityRank[b.sev.level] - severityRank[a.sev.level]) || (b.amount - a.amount));
+
+            // Update stats
+            document.getElementById('investAnalyzed').textContent = invoices.length;
+            document.getElementById('investLow').textContent = counters.low;
+            document.getElementById('investMed').textContent = counters.medium;
+            document.getElementById('investHigh').textContent = counters.high;
+            document.getElementById('investCritical').textContent = counters.critical;
+            document.getElementById('investCount').textContent = `${flagged.length} عملية مشبوهة`;
+
+            // Render table
+            const tbody = document.querySelector('#investigatorTable tbody');
+            tbody.innerHTML = '';
+            if (flagged.length === 0) {
+                renderEmptyState(tbody, 10, invoices.length === 0
+                    ? 'لا توجد فواتير في النطاق المحدد للتحليل.'
+                    : `لم تتجاوز أي عملية عتبة ${threshold.toLocaleString('ar-SA')} ر.س.`, 'fa-shield-alt');
+            } else {
+                flagged.forEach(({ inv, sev, amount }) => {
+                    const client = db.clients.find(c => c.id == inv.clientId);
+                    const counter = db.clients.find(c => c.id == inv.counterpartyClientId);
+                    const paid = Number(inv.paid) || 0;
+                    const remaining = amount - paid;
+                    const tr = tbody.insertRow();
+                    tr.innerHTML = `
+                        <td><span style="background:${sev.bg};color:${sev.color};padding:4px 10px;border-radius:12px;font-size:11px;font-weight:bold;">${sev.label}</span></td>
+                        <td>${inv.date || '-'}</td>
+                        <td>${client ? client.name : '-'}</td>
+                        <td>${counter ? counter.name : '-'}</td>
+                        <td>${inv.reference || '-'}</td>
+                        <td>${(inv.description || '-').substring(0, 50)}</td>
+                        <td style="font-weight:bold;color:${sev.color};">${amount.toLocaleString('ar-SA')} ر.س</td>
+                        <td>${paid.toLocaleString('ar-SA')}</td>
+                        <td style="color:${remaining > 0 ? '#dc2626' : '#10b981'};">${remaining.toLocaleString('ar-SA')}</td>
+                        <td>
+                            <button class="btn btn-primary btn-small" onclick="editInvoice('${inv.id}')" title="تعديل"><i class="fas fa-edit"></i></button>
+                            <button class="btn btn-secondary btn-small" onclick="exportInvoicePDF('${inv.id}')" title="PDF"><i class="fas fa-file-pdf"></i></button>
+                            ${remaining > 0 ? `<button class="btn btn-success btn-small" onclick="createSettlementFromInvoice('${inv.id}')" title="إقرار"><i class="fas fa-file-signature"></i></button>` : ''}
+                        </td>
+                    `;
+                });
+            }
+
+            showAlert('investigatorAlert', `اكتمل التحليل: ${flagged.length} عملية مشبوهة من أصل ${invoices.length}`);
+        }
+
+        function exportInvestigatorPDF() {
+            const tbody = document.querySelector('#investigatorTable tbody');
+            if (!tbody || tbody.rows.length === 0 || tbody.querySelector('.empty-state')) {
+                alert('شغّل التحليل أولاً للحصول على بيانات');
+                return;
+            }
+            const stats = {
+                analyzed: document.getElementById('investAnalyzed').textContent,
+                low: document.getElementById('investLow').textContent,
+                med: document.getElementById('investMed').textContent,
+                high: document.getElementById('investHigh').textContent,
+                critical: document.getElementById('investCritical').textContent
+            };
+            const rows = Array.from(tbody.querySelectorAll('tr')).map(tr => {
+                const cells = Array.from(tr.cells).slice(0, 9);
+                return '<tr>' + cells.map(c => `<td style="padding:6px;border:1px solid #ddd;font-size:11px;">${c.textContent.trim()}</td>`).join('') + '</tr>';
+            }).join('');
+
+            const html = `<div style="max-width:1000px;margin:0 auto;padding:25px;background:white;font-family:Arial;color:#222;">
+                <div style="text-align:center;padding-bottom:15px;border-bottom:3px solid #1a4d2e;">
+                    <h1 style="color:#1a4d2e;">تقرير المحقق المالي الجنائي</h1>
+                    <p style="color:#666;font-size:12px;">${new Date().toLocaleDateString('ar-SA')}</p>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:20px;">
+                    <div style="padding:10px;background:#f5f5f5;border-radius:6px;text-align:center;"><div style="font-size:11px;color:#666;">المحللة</div><div style="font-size:18px;font-weight:bold;">${stats.analyzed}</div></div>
+                    <div style="padding:10px;background:#fffbeb;border-radius:6px;text-align:center;"><div style="font-size:11px;color:#666;">منخفضة</div><div style="font-size:18px;font-weight:bold;color:#92400e;">${stats.low}</div></div>
+                    <div style="padding:10px;background:#fef3c7;border-radius:6px;text-align:center;"><div style="font-size:11px;color:#666;">متوسطة</div><div style="font-size:18px;font-weight:bold;color:#b45309;">${stats.med}</div></div>
+                    <div style="padding:10px;background:#fee2e2;border-radius:6px;text-align:center;"><div style="font-size:11px;color:#666;">عالية</div><div style="font-size:18px;font-weight:bold;color:#991b1b;">${stats.high}</div></div>
+                    <div style="padding:10px;background:#fef2f2;border-radius:6px;text-align:center;"><div style="font-size:11px;color:#666;">حرجة</div><div style="font-size:18px;font-weight:bold;color:#7f1d1d;">${stats.critical}</div></div>
+                </div>
+                <table style="width:100%;border-collapse:collapse;margin-top:20px;">
+                    <thead><tr style="background:#1a4d2e;color:white;">
+                        <th style="padding:8px;border:1px solid #1a4d2e;font-size:11px;">الخطورة</th>
+                        <th style="padding:8px;border:1px solid #1a4d2e;font-size:11px;">التاريخ</th>
+                        <th style="padding:8px;border:1px solid #1a4d2e;font-size:11px;">العميل</th>
+                        <th style="padding:8px;border:1px solid #1a4d2e;font-size:11px;">الخصم</th>
+                        <th style="padding:8px;border:1px solid #1a4d2e;font-size:11px;">المرجع</th>
+                        <th style="padding:8px;border:1px solid #1a4d2e;font-size:11px;">البيان</th>
+                        <th style="padding:8px;border:1px solid #1a4d2e;font-size:11px;">المبلغ</th>
+                        <th style="padding:8px;border:1px solid #1a4d2e;font-size:11px;">المدفوع</th>
+                        <th style="padding:8px;border:1px solid #1a4d2e;font-size:11px;">المتبقي</th>
+                    </tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+                <div style="margin-top:30px;padding-top:15px;border-top:2px solid #eee;text-align:center;font-size:11px;color:#888;">نظام 1000 عين · المحقق المالي الجنائي</div>
+            </div>`;
+            exportToPDF(html, `Investigator-Report-${Date.now()}.pdf`);
+        }
+
+        // ========================================
+        // المحاسب القانوني (Legal Accountant)
+        // ========================================
+        function populateAccountantFilters() {
+            ['accountantClient', 'accountantCounterparty'].forEach(id => {
+                const sel = document.getElementById(id);
+                if (!sel) return;
+                const current = sel.value;
+                sel.innerHTML = '<option value="">— الكل —</option>';
+                db.clients.forEach(c => {
+                    const o = document.createElement('option');
+                    o.value = c.id; o.textContent = c.name;
+                    sel.appendChild(o);
+                });
+                if (current) sel.value = current;
+            });
+        }
+
+        function runAccountant() {
+            populateAccountantFilters();
+
+            const filterClient = document.getElementById('accountantClient')?.value || '';
+            const filterCounter = document.getElementById('accountantCounterparty')?.value || '';
+            const dateFrom = document.getElementById('accountantDateFrom')?.value || '';
+            const dateTo = document.getElementById('accountantDateTo')?.value || '';
+
+            const inRange = (d) => {
+                if (!dateFrom && !dateTo) return true;
+                if (!d) return false;
+                if (dateFrom && d < dateFrom) return false;
+                if (dateTo && d > dateTo) return false;
+                return true;
+            };
+
+            const invoices = db.invoices.filter(inv => {
+                if (filterClient && inv.clientId !== filterClient && inv.counterpartyClientId !== filterClient) return false;
+                if (filterCounter && inv.clientId !== filterCounter && inv.counterpartyClientId !== filterCounter) return false;
+                if (!inRange(inv.date)) return false;
+                return true;
+            });
+
+            // Aggregate
+            let totalDebit = 0, totalCredit = 0;
+            const groups = {};
+            invoices.forEach(inv => {
+                const amount = Number(inv.amount) || 0;
+                const paid = Number(inv.paid) || 0;
+                totalDebit += amount;
+                totalCredit += paid;
+                const key = (inv.clientId || '') + '|' + (inv.counterpartyClientId || '');
+                if (!groups[key]) {
+                    groups[key] = { clientId: inv.clientId || '', counterpartyId: inv.counterpartyClientId || '', count: 0, debit: 0, credit: 0 };
+                }
+                groups[key].count++;
+                groups[key].debit += amount;
+                groups[key].credit += paid;
+            });
+            const netBalance = totalDebit - totalCredit;
+
+            // Update stats
+            document.getElementById('acctInvoicesCount').textContent = invoices.length;
+            document.getElementById('acctTotalDebit').textContent = totalDebit.toLocaleString('ar-SA') + ' ر.س';
+            document.getElementById('acctTotalCredit').textContent = totalCredit.toLocaleString('ar-SA') + ' ر.س';
+            document.getElementById('acctNetBalance').textContent = netBalance.toLocaleString('ar-SA') + ' ر.س';
+            document.getElementById('acctNetBalance').style.color = netBalance > 0 ? '#dc2626' : '#10b981';
+            document.getElementById('acctCount').textContent = `${Object.keys(groups).length} مجموعة`;
+
+            // Render breakdown table
+            const tbody = document.querySelector('#accountantTable tbody');
+            tbody.innerHTML = '';
+            if (Object.keys(groups).length === 0) {
+                renderEmptyState(tbody, 8, 'لا توجد بيانات في النطاق المحدد.', 'fa-balance-scale');
+            } else {
+                Object.values(groups)
+                    .sort((a, b) => (b.debit - b.credit) - (a.debit - a.credit))
+                    .forEach(g => {
+                        const client = db.clients.find(c => c.id == g.clientId);
+                        const counter = db.clients.find(c => c.id == g.counterpartyId);
+                        const balance = g.debit - g.credit;
+                        const statusLabel = balance <= 0.01 ? 'مسددة' : (g.credit > 0 ? 'مدفوعة جزئياً' : 'غير مسددة');
+                        const statusClass = balance <= 0.01 ? 'completed' : 'pending';
+                        const tr = tbody.insertRow();
+                        tr.innerHTML = `
+                            <td>${client ? client.name : '-'}</td>
+                            <td>${counter ? counter.name : '— لا يوجد —'}</td>
+                            <td>${g.count}</td>
+                            <td>${g.debit.toLocaleString('ar-SA')} ر.س</td>
+                            <td>${g.credit.toLocaleString('ar-SA')} ر.س</td>
+                            <td style="font-weight:bold;color:${balance > 0 ? '#dc2626' : '#10b981'};">${balance.toLocaleString('ar-SA')} ر.س</td>
+                            <td><span class="status-badge status-${statusClass}">${statusLabel}</span></td>
+                            <td>
+                                ${balance > 0 ? `<button class="btn btn-success btn-small" onclick="createSettlementFromReport('${g.clientId}','${g.counterpartyId}',${balance},${g.debit},${g.credit})">
+                                    <i class="fas fa-file-signature"></i> إقرار
+                                </button>` : '<span class="status-badge status-completed">مسددة</span>'}
+                            </td>
+                        `;
+                    });
+            }
+
+            showAlert('accountantAlert', `تم حساب الأرصدة: ${invoices.length} فاتورة في ${Object.keys(groups).length} مجموعة`);
+        }
+
+        function exportAccountantPDF() {
+            const tbody = document.querySelector('#accountantTable tbody');
+            if (!tbody || tbody.rows.length === 0 || tbody.querySelector('.empty-state')) {
+                alert('شغّل الحساب أولاً للحصول على بيانات');
+                return;
+            }
+            const stats = {
+                count: document.getElementById('acctInvoicesCount').textContent,
+                debit: document.getElementById('acctTotalDebit').textContent,
+                credit: document.getElementById('acctTotalCredit').textContent,
+                net: document.getElementById('acctNetBalance').textContent
+            };
+            const rows = Array.from(tbody.querySelectorAll('tr')).map(tr => {
+                const cells = Array.from(tr.cells).slice(0, 7);
+                return '<tr>' + cells.map(c => `<td style="padding:6px;border:1px solid #ddd;font-size:11px;">${c.textContent.trim()}</td>`).join('') + '</tr>';
+            }).join('');
+
+            const html = `<div style="max-width:900px;margin:0 auto;padding:25px;background:white;font-family:Arial;color:#222;">
+                <div style="text-align:center;padding-bottom:15px;border-bottom:3px solid #1a4d2e;">
+                    <h1 style="color:#1a4d2e;">تقرير المحاسب القانوني</h1>
+                    <p style="color:#666;font-size:12px;">${new Date().toLocaleDateString('ar-SA')}</p>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:20px;">
+                    <div style="padding:12px;background:#f5f5f5;border-radius:6px;text-align:center;"><div style="font-size:11px;color:#666;">عدد الفواتير</div><div style="font-size:18px;font-weight:bold;">${stats.count}</div></div>
+                    <div style="padding:12px;background:#f0f9ff;border-radius:6px;text-align:center;"><div style="font-size:11px;color:#666;">إجمالي المدين</div><div style="font-size:16px;font-weight:bold;color:#1a4d2e;">${stats.debit}</div></div>
+                    <div style="padding:12px;background:#d1fae5;border-radius:6px;text-align:center;"><div style="font-size:11px;color:#666;">إجمالي الدائن</div><div style="font-size:16px;font-weight:bold;color:#10b981;">${stats.credit}</div></div>
+                    <div style="padding:12px;background:#fee2e2;border-radius:6px;text-align:center;"><div style="font-size:11px;color:#666;">الصافي</div><div style="font-size:16px;font-weight:bold;color:#dc2626;">${stats.net}</div></div>
+                </div>
+                <table style="width:100%;border-collapse:collapse;margin-top:20px;">
+                    <thead><tr style="background:#1a4d2e;color:white;">
+                        <th style="padding:8px;border:1px solid #1a4d2e;font-size:11px;">العميل</th>
+                        <th style="padding:8px;border:1px solid #1a4d2e;font-size:11px;">الخصم</th>
+                        <th style="padding:8px;border:1px solid #1a4d2e;font-size:11px;">عدد</th>
+                        <th style="padding:8px;border:1px solid #1a4d2e;font-size:11px;">مدين</th>
+                        <th style="padding:8px;border:1px solid #1a4d2e;font-size:11px;">دائن</th>
+                        <th style="padding:8px;border:1px solid #1a4d2e;font-size:11px;">الرصيد</th>
+                        <th style="padding:8px;border:1px solid #1a4d2e;font-size:11px;">الحالة</th>
+                    </tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+                <div style="margin-top:30px;padding-top:15px;border-top:2px solid #eee;text-align:center;font-size:11px;color:#888;">نظام 1000 عين · المحاسب القانوني</div>
+            </div>`;
+            exportToPDF(html, `Accountant-Report-${Date.now()}.pdf`);
         }
 
         function loadReports() {
