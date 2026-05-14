@@ -11,6 +11,15 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+    <!-- Excel parsing (SheetJS) -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- PDF parsing (pdf.js) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        if (window.pdfjsLib) {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
+    </script>
     <style>
         * {
             margin: 0;
@@ -765,6 +774,10 @@
                         <i class="fas fa-folder"></i> الملفات
                         <span class="sidebar-badge" id="filesCount">0</span>
                     </a></li>
+                    <li><a onclick="switchSection('statements')" class="nav-link">
+                        <i class="fas fa-file-import"></i> كشف الحسابات
+                        <span class="sidebar-badge" id="statementsCount">0</span>
+                    </a></li>
                 </ul>
             </div>
 
@@ -945,7 +958,11 @@
                                 <tr>
                                     <th>الرقم</th>
                                     <th>العميل</th>
+                                    <th>الخصم</th>
                                     <th>المبلغ</th>
+                                    <th>المدفوع</th>
+                                    <th>المتبقي</th>
+                                    <th>البيان</th>
                                     <th>التاريخ</th>
                                     <th>الحالة</th>
                                     <th>الإجراءات</th>
@@ -1076,6 +1093,55 @@
                 </div>
             </section>
 
+            <!-- Statements Section (كشف الحسابات) -->
+            <section id="statements" class="section">
+                <div class="page-header">
+                    <h1><i class="fas fa-file-import"></i> كشف الحسابات</h1>
+                    <div class="header-actions">
+                        <button class="btn btn-primary" onclick="openStatementUploadModal()">
+                            <i class="fas fa-upload"></i> رفع كشف
+                        </button>
+                        <button class="btn btn-secondary btn-small" onclick="exportTable('statements')">
+                            <i class="fas fa-download"></i> تصدير
+                        </button>
+                    </div>
+                </div>
+
+                <div id="statementsAlert" class="alert alert-success"></div>
+
+                <div class="filters">
+                    <div class="filter-group">
+                        <label>البحث:</label>
+                        <input type="text" id="statementSearch" placeholder="بحث في البيان أو المرجع" oninput="filterStatementsTable()">
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2>الأسطر المستوردة</h2>
+                    </div>
+                    <div class="table-wrapper">
+                        <table id="statementsTable">
+                            <thead>
+                                <tr>
+                                    <th>التاريخ</th>
+                                    <th>العميل</th>
+                                    <th>الطرف الآخر</th>
+                                    <th>المرجع</th>
+                                    <th>البيان</th>
+                                    <th>مدين</th>
+                                    <th>دائن</th>
+                                    <th>الرصيد</th>
+                                    <th>الملف المصدر</th>
+                                    <th>الإجراءات</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
             <!-- Users Section -->
             <section id="users" class="section">
                 <div class="page-header">
@@ -1111,36 +1177,71 @@
             <section id="reports" class="section">
                 <div class="page-header">
                     <h1><i class="fas fa-chart-bar"></i> التقارير</h1>
+                    <div class="header-actions">
+                        <button class="btn btn-secondary btn-small" onclick="exportTable('reports')">
+                            <i class="fas fa-download"></i> تصدير
+                        </button>
+                    </div>
                 </div>
 
                 <div class="stats-grid">
-                    <div class="stat-card">
+                    <div class="stat-card admin-only">
                         <div class="stat-label">إجمالي العملاء</div>
                         <div class="stat-value" id="totalClients">0</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label">عدد العمليات</div>
-                        <div class="stat-value" id="totalTransactions">0</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-label">عدد الفواتير</div>
                         <div class="stat-value" id="totalInvoices">0</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-label">عدد القضايا</div>
-                        <div class="stat-value" id="totalCases">0</div>
+                        <div class="stat-label">إجمالي المبلغ</div>
+                        <div class="stat-value" id="totalAmountSum">0</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-label">عدد المخالصات</div>
-                        <div class="stat-value" id="totalSettlements">0</div>
+                        <div class="stat-label">إجمالي المدفوع</div>
+                        <div class="stat-value" id="totalPaidSum">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">إجمالي المتبقي</div>
+                        <div class="stat-value" id="totalRemainingSum">0</div>
+                    </div>
+                </div>
+
+                <div class="filters">
+                    <div class="filter-group">
+                        <label>تصفية حسب العميل:</label>
+                        <select id="reportClientFilter" onchange="loadReports()">
+                            <option value="">— الكل —</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>تصفية حسب الخصم:</label>
+                        <select id="reportCounterpartyFilter" onchange="loadReports()">
+                            <option value="">— الكل —</option>
+                        </select>
                     </div>
                 </div>
 
                 <div class="card">
-                    <h2>الإحصائيات التفصيلية</h2>
-                    <div style="margin-top: 20px;">
-                        <p><strong>تم إعداد التقرير بناءً على البيانات الحالية في النظام</strong></p>
-                        <p style="margin-top: 10px;">جميع الأرقام محدثة بشكل فوري عند إضافة أو تعديل أي بيانات</p>
+                    <div class="card-header">
+                        <h2>كشف العميل × الخصم</h2>
+                    </div>
+                    <div class="table-wrapper">
+                        <table id="reportsTable">
+                            <thead>
+                                <tr>
+                                    <th>العميل</th>
+                                    <th>الخصم</th>
+                                    <th>عدد الفواتير</th>
+                                    <th>إجمالي المبلغ</th>
+                                    <th>إجمالي المدفوع</th>
+                                    <th>المتبقي</th>
+                                    <th>الصافي</th>
+                                    <th>الإجراءات</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
                     </div>
                 </div>
             </section>
@@ -1240,25 +1341,48 @@
             </div>
             <form onsubmit="saveInvoice(event)">
                 <input type="hidden" id="invoiceId">
-                <div class="form-group admin-only">
-                    <label>العميل *</label>
-                    <select id="invoiceClient"></select>
+                <div class="form-row admin-only">
+                    <div class="form-group">
+                        <label>العميل *</label>
+                        <select id="invoiceClient"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>الخصم (الطرف الآخر)</label>
+                        <select id="invoiceCounterparty">
+                            <option value="">— لا يوجد —</option>
+                        </select>
+                    </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label>المبلغ *</label>
+                        <label>المبلغ * (مدين)</label>
                         <input type="number" id="invoiceAmount" step="0.01" required>
                     </div>
+                    <div class="form-group">
+                        <label>المدفوع (دائن)</label>
+                        <input type="number" id="invoicePaid" step="0.01" value="0">
+                    </div>
+                </div>
+                <div class="form-row">
                     <div class="form-group">
                         <label>التاريخ *</label>
                         <input type="date" id="invoiceDate" required>
                     </div>
+                    <div class="form-group">
+                        <label>المرجع</label>
+                        <input type="text" id="invoiceReference">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>البيان</label>
+                    <input type="text" id="invoiceDescription">
                 </div>
                 <div class="form-group">
                     <label>الحالة</label>
                     <select id="invoiceStatus">
                         <option value="مسودة">مسودة</option>
                         <option value="مرسلة">مرسلة</option>
+                        <option value="مدفوعة جزئياً">مدفوعة جزئياً</option>
                         <option value="مدفوعة">مدفوعة</option>
                     </select>
                 </div>
@@ -1400,6 +1524,90 @@
         </div>
     </div>
 
+    <!-- Statement Upload Modal -->
+    <div id="statementUploadModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-upload"></i> رفع كشف حساب</h2>
+                <button class="close-btn" onclick="closeModal('statementUploadModal')">&times;</button>
+            </div>
+            <form onsubmit="handleStatementUpload(event)">
+                <div class="form-row admin-only">
+                    <div class="form-group">
+                        <label>العميل *</label>
+                        <select id="statementClient"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>الخصم (الطرف الآخر)</label>
+                        <select id="statementCounterparty">
+                            <option value="">— لا يوجد —</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="client-only" style="background:#fffbf0;border:1px solid #d4af37;padding:10px;border-radius:6px;margin-bottom:15px;">
+                    <small>سيتم ربط الكشف بحسابك تلقائياً. اختر الخصم إذا كان كشفاً بين طرفين:</small>
+                    <div class="form-group" style="margin-top:8px;margin-bottom:0;">
+                        <label>الخصم (اختياري)</label>
+                        <select id="statementCounterpartyClient">
+                            <option value="">— لا يوجد —</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>الملف * (Excel أو PDF أو CSV)</label>
+                    <input type="file" id="statementFile" accept=".xlsx,.xls,.csv,.pdf" required>
+                    <small style="color:#666; font-size:11px;">الأعمدة المتوقعة: التاريخ، البيان، المرجع، مدين، دائن، الرصيد. ملفات PDF تُستخرج نصياً.</small>
+                </div>
+                <div id="statementUploadStatus" style="margin: 10px 0; font-size: 13px;"></div>
+                <div style="margin-top: 20px; display: flex; gap: 10px;">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-file-import"></i> قراءة ومعاينة
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('statementUploadModal')">إلغاء</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Statement Preview Modal -->
+    <div id="statementPreviewModal" class="modal">
+        <div class="modal-content" style="max-width: 95vw;">
+            <div class="modal-header">
+                <h2><i class="fas fa-eye"></i> معاينة الكشف</h2>
+                <button class="close-btn" onclick="closeModal('statementPreviewModal')">&times;</button>
+            </div>
+            <div style="margin-bottom: 10px; font-size: 13px;">
+                <span>عدد الأسطر: <strong id="statementPreviewCount">0</strong></span> ·
+                <span>إجمالي مدين: <strong id="statementPreviewDebit">0.00</strong> ر.س</span> ·
+                <span>إجمالي دائن: <strong id="statementPreviewCredit">0.00</strong> ر.س</span> ·
+                <span>المتبقي: <strong id="statementPreviewRemaining">0.00</strong> ر.س</span>
+            </div>
+            <div class="table-wrapper" style="max-height: 55vh; overflow-y: auto;">
+                <table id="statementPreviewTable">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>التاريخ</th>
+                            <th>المرجع</th>
+                            <th>البيان</th>
+                            <th>مدين</th>
+                            <th>دائن</th>
+                            <th>الرصيد</th>
+                            <th>—</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div style="margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
+                <button class="btn btn-success" onclick="confirmSaveStatement()">
+                    <i class="fas fa-check"></i> حفظ في الفواتير
+                </button>
+                <button class="btn btn-secondary" onclick="closeModal('statementPreviewModal')">إلغاء</button>
+            </div>
+        </div>
+    </div>
+
     <!-- User Modal -->
     <div id="userModal" class="modal">
         <div class="modal-content">
@@ -1502,9 +1710,13 @@
         function isClient() { return currentUser && currentUser.role === 'client'; }
 
         function filterMine(items, key) {
-            key = key || 'clientId';
             if (!currentUser || isAdmin()) return items;
-            return items.filter(item => item[key] === currentUser.clientId);
+            const myId = currentUser.clientId;
+            if (Array.isArray(key)) {
+                return items.filter(item => key.some(k => item[k] === myId));
+            }
+            const k = key || 'clientId';
+            return items.filter(item => item[k] === myId);
         }
 
         function getClientIdForSave(selectId) {
@@ -1621,14 +1833,23 @@
             if (elSet) elSet.textContent = filterMine(db.settlements).length;
             const elFiles = document.getElementById('filesCount');
             if (elFiles) elFiles.textContent = filterMine(db.files).length;
+            const elStmt = document.getElementById('statementsCount');
+            if (elStmt) elStmt.textContent = filterMine(db.invoices.filter(i => i.sourceFile), ['clientId', 'counterpartyClientId']).length;
 
             // Refresh table of the changed collection (or all if unspecified)
             const renderers = {
                 clients: () => { if (document.querySelector('#clientsTable tbody')) loadClients(); updateClientSelects(); },
                 transactions: () => { if (document.querySelector('#transactionsTable tbody')) loadTransactions(); },
-                invoices: () => { if (document.querySelector('#invoicesTable tbody')) loadInvoices(); },
+                invoices: () => {
+                    if (document.querySelector('#invoicesTable tbody')) loadInvoices();
+                    if (document.querySelector('#statementsTable tbody')) loadStatements();
+                    if (document.querySelector('#reportsTable tbody')) loadReports();
+                },
                 cases: () => { if (document.querySelector('#casesTable tbody')) loadCases(); },
-                settlements: () => { if (document.querySelector('#settlementsTable tbody')) loadSettlements(); },
+                settlements: () => {
+                    if (document.querySelector('#settlementsTable tbody')) loadSettlements();
+                    if (document.querySelector('#reportsTable tbody')) loadReports();
+                },
                 files: () => { if (document.querySelector('#filesTable tbody')) loadFiles(); },
                 users: () => { if (document.querySelector('#usersTable tbody')) loadUsers(); }
             };
@@ -1682,6 +1903,8 @@
                 loadSettlements();
             } else if (sectionId === 'files') {
                 loadFiles();
+            } else if (sectionId === 'statements') {
+                loadStatements();
             } else if (sectionId === 'users') {
                 loadUsers();
             } else if (sectionId === 'reports') {
@@ -1904,21 +2127,45 @@
         function openInvoiceModal() {
             document.getElementById('invoiceId').value = '';
             document.getElementById('invoiceClient').value = '';
+            const cp = document.getElementById('invoiceCounterparty');
+            if (cp) cp.value = '';
             document.getElementById('invoiceAmount').value = '';
+            const paid = document.getElementById('invoicePaid');
+            if (paid) paid.value = '0';
+            const ref = document.getElementById('invoiceReference');
+            if (ref) ref.value = '';
+            const desc = document.getElementById('invoiceDescription');
+            if (desc) desc.value = '';
             document.getElementById('invoiceDate').valueAsDate = new Date();
             document.getElementById('invoiceStatus').value = 'مسودة';
             openModal('invoiceModal');
+        }
+
+        function computeInvoiceStatus(amount, paid) {
+            if (paid <= 0) return 'مرسلة';
+            if (paid >= amount) return 'مدفوعة';
+            return 'مدفوعة جزئياً';
         }
 
         async function saveInvoice(event) {
             event.preventDefault();
 
             const id = document.getElementById('invoiceId').value;
+            const amount = parseFloat(document.getElementById('invoiceAmount').value) || 0;
+            const paid = parseFloat(document.getElementById('invoicePaid')?.value) || 0;
+            const userStatus = document.getElementById('invoiceStatus').value;
+            // Auto-update status if user kept default
+            const autoStatus = computeInvoiceStatus(amount, paid);
             const invoice = {
                 clientId: getClientIdForSave('invoiceClient'),
-                amount: parseFloat(document.getElementById('invoiceAmount').value),
+                counterpartyClientId: document.getElementById('invoiceCounterparty')?.value || '',
+                amount,
+                paid,
+                remaining: amount - paid,
+                reference: document.getElementById('invoiceReference')?.value || '',
+                description: document.getElementById('invoiceDescription')?.value || '',
                 date: document.getElementById('invoiceDate').value,
-                status: document.getElementById('invoiceStatus').value
+                status: (userStatus === 'مسودة') ? userStatus : autoStatus
             };
 
             try {
@@ -1939,28 +2186,41 @@
             if (!tbody) return;
             tbody.innerHTML = '';
 
-            const items = filterMine(db.invoices);
+            const items = filterMine(db.invoices, ['clientId', 'counterpartyClientId']);
             items.forEach(inv => {
                 const client = db.clients.find(c => c.id == inv.clientId);
+                const counter = db.clients.find(c => c.id == inv.counterpartyClientId);
+                const amount = Number(inv.amount) || 0;
+                const paid = Number(inv.paid) || 0;
+                const remaining = (typeof inv.remaining === 'number') ? inv.remaining : (amount - paid);
+                const statusClass = inv.status === 'مدفوعة' ? 'completed' : (inv.status === 'مدفوعة جزئياً' ? 'pending' : 'pending');
                 const row = tbody.insertRow();
                 row.innerHTML = `
                     <td>INV-${String(inv.id).substring(0, 8)}</td>
                     <td>${client ? client.name : '-'}</td>
-                    <td>${inv.amount.toFixed(2)} ر.س</td>
-                    <td>${inv.date}</td>
-                    <td><span class="status-badge status-${inv.status === 'مدفوعة' ? 'completed' : 'pending'}">${inv.status}</span></td>
+                    <td>${counter ? counter.name : '-'}</td>
+                    <td>${amount.toFixed(2)} ر.س</td>
+                    <td>${paid.toFixed(2)} ر.س</td>
+                    <td>${remaining.toFixed(2)} ر.س</td>
+                    <td>${inv.description || '-'}</td>
+                    <td>${inv.date || '-'}</td>
+                    <td><span class="status-badge status-${statusClass}">${inv.status || '-'}</span></td>
                     <td>
-                        <button class="btn btn-primary btn-small" onclick="editInvoice('${inv.id}')">
+                        <button class="btn btn-primary btn-small" onclick="editInvoice('${inv.id}')" title="تعديل">
                             <i class="fas fa-edit"></i>
                         </button>
-                        <button class="btn btn-danger btn-small" onclick="deleteInvoice('${inv.id}')">
+                        ${remaining > 0 ? `<button class="btn btn-success btn-small" onclick="createSettlementFromInvoice('${inv.id}')" title="إقرار بالمبلغ المتبقي">
+                            <i class="fas fa-file-signature"></i>
+                        </button>` : ''}
+                        <button class="btn btn-danger btn-small" onclick="deleteInvoice('${inv.id}')" title="حذف">
                             <i class="fas fa-trash"></i>
                         </button>
                     </td>
                 `;
             });
 
-            document.getElementById('invoicesCount').textContent = items.length;
+            const countEl = document.getElementById('invoicesCount');
+            if (countEl) countEl.textContent = items.length;
         }
 
         function editInvoice(id) {
@@ -1968,10 +2228,18 @@
             if (!inv) return;
 
             document.getElementById('invoiceId').value = inv.id;
-            document.getElementById('invoiceClient').value = inv.clientId;
-            document.getElementById('invoiceAmount').value = inv.amount;
-            document.getElementById('invoiceDate').value = inv.date;
-            document.getElementById('invoiceStatus').value = inv.status;
+            document.getElementById('invoiceClient').value = inv.clientId || '';
+            const cp = document.getElementById('invoiceCounterparty');
+            if (cp) cp.value = inv.counterpartyClientId || '';
+            document.getElementById('invoiceAmount').value = inv.amount || 0;
+            const paid = document.getElementById('invoicePaid');
+            if (paid) paid.value = inv.paid || 0;
+            const ref = document.getElementById('invoiceReference');
+            if (ref) ref.value = inv.reference || '';
+            const desc = document.getElementById('invoiceDescription');
+            if (desc) desc.value = inv.description || '';
+            document.getElementById('invoiceDate').value = inv.date || '';
+            document.getElementById('invoiceStatus').value = inv.status || 'مسودة';
             openModal('invoiceModal');
         }
 
@@ -2586,19 +2854,87 @@
         }
 
         function loadReports() {
-            // Clients count makes sense only for admin
+            // Admin sees clients count; client doesn't
             const elTC = document.getElementById('totalClients');
-            const elTCParent = elTC && elTC.closest('.stat-card');
-            if (isClient() && elTCParent) {
-                elTCParent.style.display = 'none';
-            } else if (elTCParent) {
-                elTCParent.style.display = '';
-                elTC.textContent = db.clients.length;
+            if (elTC) elTC.textContent = db.clients.length;
+
+            const invoices = filterMine(db.invoices, ['clientId', 'counterpartyClientId']);
+
+            // Summary totals
+            let totalAmount = 0, totalPaid = 0;
+            invoices.forEach(inv => {
+                totalAmount += Number(inv.amount) || 0;
+                totalPaid += Number(inv.paid) || 0;
+            });
+            const totalRemaining = totalAmount - totalPaid;
+
+            const setText = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
+            setText('totalInvoices', invoices.length);
+            setText('totalAmountSum', totalAmount.toFixed(2) + ' ر.س');
+            setText('totalPaidSum', totalPaid.toFixed(2) + ' ر.س');
+            setText('totalRemainingSum', totalRemaining.toFixed(2) + ' ر.س');
+
+            // Populate client filter dropdowns
+            const cf = document.getElementById('reportClientFilter');
+            const cpf = document.getElementById('reportCounterpartyFilter');
+            if (cf && cf.options.length <= 1) {
+                db.clients.forEach(c => {
+                    const o = document.createElement('option');
+                    o.value = c.id; o.textContent = c.name;
+                    cf.appendChild(o);
+                });
             }
-            document.getElementById('totalTransactions').textContent = filterMine(db.transactions).length;
-            document.getElementById('totalInvoices').textContent = filterMine(db.invoices).length;
-            document.getElementById('totalCases').textContent = filterMine(db.cases).length;
-            document.getElementById('totalSettlements').textContent = filterMine(db.settlements).length;
+            if (cpf && cpf.options.length <= 1) {
+                db.clients.forEach(c => {
+                    const o = document.createElement('option');
+                    o.value = c.id; o.textContent = c.name;
+                    cpf.appendChild(o);
+                });
+            }
+
+            const filterClientId = cf ? cf.value : '';
+            const filterCounterId = cpf ? cpf.value : '';
+
+            // Aggregate by (clientId, counterpartyClientId)
+            const groups = {};
+            invoices.forEach(inv => {
+                if (filterClientId && inv.clientId !== filterClientId && inv.counterpartyClientId !== filterClientId) return;
+                if (filterCounterId && inv.clientId !== filterCounterId && inv.counterpartyClientId !== filterCounterId) return;
+                const key = (inv.clientId || '') + '|' + (inv.counterpartyClientId || '');
+                if (!groups[key]) {
+                    groups[key] = { clientId: inv.clientId || '', counterpartyId: inv.counterpartyClientId || '', count: 0, amount: 0, paid: 0 };
+                }
+                groups[key].count += 1;
+                groups[key].amount += Number(inv.amount) || 0;
+                groups[key].paid += Number(inv.paid) || 0;
+            });
+
+            const tbody = document.querySelector('#reportsTable tbody');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+            Object.values(groups)
+                .sort((a, b) => (b.amount - b.paid) - (a.amount - a.paid))
+                .forEach(g => {
+                    const client = db.clients.find(c => c.id == g.clientId);
+                    const counter = db.clients.find(c => c.id == g.counterpartyId);
+                    const remaining = g.amount - g.paid;
+                    const net = remaining; // الصافي = المتبقي (يمكن تعديله لاحقاً)
+                    const tr = tbody.insertRow();
+                    tr.innerHTML = `
+                        <td>${client ? client.name : '-'}</td>
+                        <td>${counter ? counter.name : '— لا يوجد —'}</td>
+                        <td>${g.count}</td>
+                        <td>${g.amount.toFixed(2)} ر.س</td>
+                        <td>${g.paid.toFixed(2)} ر.س</td>
+                        <td style="color:${remaining > 0 ? '#dc2626' : '#10b981'};font-weight:bold;">${remaining.toFixed(2)} ر.س</td>
+                        <td>${net.toFixed(2)} ر.س</td>
+                        <td>
+                            ${remaining > 0 ? `<button class="btn btn-success btn-small" onclick="createSettlementFromReport('${g.clientId}','${g.counterpartyId}',${remaining},${g.amount},${g.paid})">
+                                <i class="fas fa-file-signature"></i> إقرار بالمبلغ
+                            </button>` : '<span class="status-badge status-completed">مسددة</span>'}
+                        </td>
+                    `;
+                });
         }
 
         // ========================================
@@ -2606,13 +2942,18 @@
         // ========================================
 
         function updateClientSelects() {
-            const selects = ['transactionClient', 'invoiceClient', 'settlementClient', 'caseClient', 'fileClient', 'userClientLink'];
+            const selects = [
+                'transactionClient', 'invoiceClient', 'invoiceCounterparty',
+                'settlementClient', 'caseClient', 'fileClient',
+                'statementClient', 'statementCounterparty', 'statementCounterpartyClient',
+                'userClientLink'
+            ];
             selects.forEach(selectId => {
                 const select = document.getElementById(selectId);
                 if (!select) return;
-                const placeholder = selectId === 'userClientLink'
-                    ? 'إنشاء سجل عميل جديد تلقائياً'
-                    : 'اختر عميل';
+                let placeholder = 'اختر عميل';
+                if (selectId === 'userClientLink') placeholder = 'إنشاء سجل عميل جديد تلقائياً';
+                else if (selectId === 'invoiceCounterparty' || selectId === 'statementCounterparty' || selectId === 'statementCounterpartyClient') placeholder = '— لا يوجد —';
                 select.innerHTML = `<option value="">${placeholder}</option>`;
                 db.clients.forEach(client => {
                     const option = document.createElement('option');
@@ -2630,6 +2971,416 @@
             setTimeout(() => {
                 alert.style.display = 'none';
             }, 3000);
+        }
+
+        // ========================================
+        // Statement Upload (Excel/PDF → Invoices)
+        // ========================================
+        let pendingStatement = null; // { rows, clientId, counterpartyId, fileName }
+
+        function openStatementUploadModal() {
+            document.getElementById('statementFile').value = '';
+            const cs = document.getElementById('statementClient');
+            if (cs) cs.value = '';
+            const cp = document.getElementById('statementCounterparty');
+            if (cp) cp.value = '';
+            const cpc = document.getElementById('statementCounterpartyClient');
+            if (cpc) cpc.value = '';
+            document.getElementById('statementUploadStatus').textContent = '';
+            pendingStatement = null;
+            openModal('statementUploadModal');
+        }
+
+        function setStatementStatus(html, isError) {
+            const el = document.getElementById('statementUploadStatus');
+            if (!el) return;
+            el.innerHTML = html;
+            el.style.color = isError ? '#dc2626' : '#1a4d2e';
+        }
+
+        async function handleStatementUpload(event) {
+            event.preventDefault();
+            const fileInput = document.getElementById('statementFile');
+            const file = fileInput.files[0];
+            if (!file) return;
+
+            const clientId = isClient()
+                ? currentUser.clientId
+                : document.getElementById('statementClient').value;
+            if (!clientId) {
+                setStatementStatus('⚠️ اختر العميل أولاً', true);
+                return;
+            }
+            const counterpartyId = isClient()
+                ? (document.getElementById('statementCounterpartyClient')?.value || '')
+                : (document.getElementById('statementCounterparty')?.value || '');
+
+            setStatementStatus('<i class="fas fa-spinner fa-spin"></i> جاري قراءة الملف...');
+
+            try {
+                const ext = (file.name.split('.').pop() || '').toLowerCase();
+                let rows = [];
+                if (['xlsx', 'xls', 'csv'].includes(ext)) {
+                    rows = await parseExcelFile(file);
+                } else if (ext === 'pdf') {
+                    rows = await parsePdfFile(file);
+                } else {
+                    throw new Error('نوع ملف غير مدعوم — يجب أن يكون Excel أو CSV أو PDF');
+                }
+
+                if (rows.length === 0) {
+                    throw new Error('لم يتم العثور على بيانات قابلة للقراءة في الملف');
+                }
+
+                pendingStatement = {
+                    rows,
+                    clientId,
+                    counterpartyId,
+                    fileName: file.name
+                };
+
+                closeModal('statementUploadModal');
+                showStatementPreview();
+            } catch (err) {
+                setStatementStatus('خطأ: ' + err.message, true);
+            }
+        }
+
+        async function parseExcelFile(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                        const arr = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false });
+                        if (arr.length < 1) { resolve([]); return; }
+
+                        // Find header row (first row with at least 2 non-empty cells)
+                        let headerIdx = 0;
+                        for (let i = 0; i < arr.length; i++) {
+                            const nonEmpty = arr[i].filter(c => String(c).trim() !== '').length;
+                            if (nonEmpty >= 2) { headerIdx = i; break; }
+                        }
+                        const headers = arr[headerIdx].map(h => String(h || '').trim());
+                        const mapping = detectColumnMapping(headers);
+                        const rows = [];
+                        for (let i = headerIdx + 1; i < arr.length; i++) {
+                            const row = arr[i];
+                            if (!row || row.every(c => c === '' || c == null)) continue;
+                            const r = normalizeStatementRow(row, mapping);
+                            // Skip rows that are completely empty after normalization
+                            if (!r.date && !r.description && !r.reference && r.debit === 0 && r.credit === 0 && r.balance === 0) continue;
+                            rows.push(r);
+                        }
+                        resolve(rows);
+                    } catch (err) { reject(err); }
+                };
+                reader.onerror = () => reject(new Error('فشل قراءة الملف'));
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        function detectColumnMapping(headers) {
+            const map = { date: -1, reference: -1, description: -1, debit: -1, credit: -1, balance: -1 };
+            const patterns = {
+                date: ['date', 'التاريخ', 'تاريخ', 'يوم'],
+                reference: ['ref', 'reference', 'المرجع', 'مرجع', 'رقم العملية', 'رقم'],
+                description: ['desc', 'description', 'البيان', 'الوصف', 'بيان', 'تفاصيل', 'details', 'notes', 'ملاحظ'],
+                debit: ['debit', 'مدين', 'دين', 'سحب', 'withdraw'],
+                credit: ['credit', 'دائن', 'إيداع', 'ايداع', 'deposit'],
+                balance: ['balance', 'الرصيد', 'رصيد']
+            };
+            headers.forEach((h, i) => {
+                const low = String(h).toLowerCase().trim();
+                if (!low) return;
+                for (const [key, pats] of Object.entries(patterns)) {
+                    if (map[key] !== -1) continue;
+                    if (pats.some(p => low.includes(p.toLowerCase()))) {
+                        map[key] = i;
+                    }
+                }
+            });
+            return map;
+        }
+
+        function parseNum(v) {
+            if (v == null || v === '') return 0;
+            const s = String(v).replace(/[,\s٬]/g, '').replace(/[٠-٩]/g, d => '0123456789'['٠١٢٣٤٥٦٧٨٩'.indexOf(d)]);
+            const n = parseFloat(s);
+            return isNaN(n) ? 0 : n;
+        }
+
+        function formatStatementDate(v) {
+            if (v == null || v === '') return '';
+            if (v instanceof Date && !isNaN(v)) return v.toISOString().split('T')[0];
+            const s = String(v).trim();
+            // Try ISO or parseable
+            const d = new Date(s);
+            if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+            // Try dd/mm/yyyy or dd-mm-yyyy
+            const m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+            if (m) {
+                let [_, dd, mm, yy] = m;
+                if (yy.length === 2) yy = '20' + yy;
+                const d2 = new Date(parseInt(yy), parseInt(mm) - 1, parseInt(dd));
+                if (!isNaN(d2.getTime())) return d2.toISOString().split('T')[0];
+            }
+            return s;
+        }
+
+        function normalizeStatementRow(row, mapping) {
+            const get = (key) => mapping[key] !== -1 ? row[mapping[key]] : '';
+            return {
+                date: formatStatementDate(get('date')),
+                reference: String(get('reference') || '').trim(),
+                description: String(get('description') || '').trim(),
+                debit: parseNum(get('debit')),
+                credit: parseNum(get('credit')),
+                balance: parseNum(get('balance'))
+            };
+        }
+
+        async function parsePdfFile(file) {
+            if (!window.pdfjsLib) throw new Error('مكتبة قراءة PDF لم تُحمَّل');
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    try {
+                        const arr = new Uint8Array(e.target.result);
+                        const pdf = await pdfjsLib.getDocument({ data: arr }).promise;
+                        const allLines = [];
+                        for (let p = 1; p <= pdf.numPages; p++) {
+                            const page = await pdf.getPage(p);
+                            const content = await page.getTextContent();
+                            // Group items by y-position (line)
+                            const lines = {};
+                            content.items.forEach(it => {
+                                const y = Math.round(it.transform[5]);
+                                if (!lines[y]) lines[y] = [];
+                                lines[y].push({ x: it.transform[4], str: it.str });
+                            });
+                            Object.keys(lines).sort((a, b) => b - a).forEach(y => {
+                                const lineItems = lines[y].sort((a, b) => a.x - b.x);
+                                const text = lineItems.map(it => it.str).join(' ').trim();
+                                if (text) allLines.push(text);
+                            });
+                        }
+                        // Best-effort: each line becomes a row in description
+                        const rows = allLines
+                            .filter(line => line.length > 2)
+                            .map(line => {
+                                // Try to detect a date at start
+                                const dateMatch = line.match(/(\d{1,4}[\/\-]\d{1,2}[\/\-]\d{1,4})/);
+                                // Try to detect numbers
+                                const nums = (line.match(/(-?\d{1,3}(?:[,\s]\d{3})*(?:\.\d+)?)/g) || [])
+                                    .map(n => parseNum(n));
+                                return {
+                                    date: dateMatch ? formatStatementDate(dateMatch[1]) : '',
+                                    reference: '',
+                                    description: line,
+                                    debit: nums[0] || 0,
+                                    credit: nums[1] || 0,
+                                    balance: nums[2] || 0
+                                };
+                            });
+                        resolve(rows);
+                    } catch (err) { reject(err); }
+                };
+                reader.onerror = () => reject(new Error('فشل قراءة الملف'));
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        function showStatementPreview() {
+            if (!pendingStatement) return;
+            const tbody = document.querySelector('#statementPreviewTable tbody');
+            tbody.innerHTML = '';
+            let totalDebit = 0, totalCredit = 0;
+            pendingStatement.rows.forEach((row, i) => {
+                totalDebit += row.debit || 0;
+                totalCredit += row.credit || 0;
+                const tr = tbody.insertRow();
+                tr.innerHTML = `
+                    <td>${i + 1}</td>
+                    <td>${row.date || '-'}</td>
+                    <td>${row.reference || '-'}</td>
+                    <td>${row.description || '-'}</td>
+                    <td>${row.debit ? row.debit.toFixed(2) : ''}</td>
+                    <td>${row.credit ? row.credit.toFixed(2) : ''}</td>
+                    <td>${row.balance ? row.balance.toFixed(2) : ''}</td>
+                    <td><button class="btn btn-danger btn-small" onclick="removePreviewRow(${i})" title="حذف"><i class="fas fa-times"></i></button></td>
+                `;
+            });
+            document.getElementById('statementPreviewCount').textContent = pendingStatement.rows.length;
+            document.getElementById('statementPreviewDebit').textContent = totalDebit.toFixed(2);
+            document.getElementById('statementPreviewCredit').textContent = totalCredit.toFixed(2);
+            document.getElementById('statementPreviewRemaining').textContent = (totalDebit - totalCredit).toFixed(2);
+            openModal('statementPreviewModal');
+        }
+
+        function removePreviewRow(i) {
+            if (!pendingStatement) return;
+            pendingStatement.rows.splice(i, 1);
+            showStatementPreview();
+        }
+
+        async function confirmSaveStatement() {
+            if (!pendingStatement || pendingStatement.rows.length === 0) {
+                alert('لا توجد أسطر للحفظ');
+                return;
+            }
+            if (!firebaseReady) {
+                alert('Firebase غير متصل — لا يمكن الحفظ السحابي');
+                return;
+            }
+            const { rows, clientId, counterpartyId, fileName } = pendingStatement;
+            try {
+                // Save in chunks of 400 (Firestore batch limit is 500)
+                const CHUNK = 400;
+                let saved = 0;
+                for (let i = 0; i < rows.length; i += CHUNK) {
+                    const chunk = rows.slice(i, i + CHUNK);
+                    const batch = firestore.batch();
+                    chunk.forEach(row => {
+                        const ref = firestore.collection('invoices').doc();
+                        const amount = row.debit || 0;
+                        const paid = row.credit || 0;
+                        batch.set(ref, {
+                            clientId,
+                            counterpartyClientId: counterpartyId || '',
+                            amount,
+                            paid,
+                            remaining: amount - paid,
+                            date: row.date || '',
+                            reference: row.reference || '',
+                            description: row.description || '',
+                            balance: row.balance || 0,
+                            sourceFile: fileName,
+                            status: computeInvoiceStatus(amount, paid),
+                            uploadedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                            uploadedBy: (currentUser && currentUser.uid) || ''
+                        });
+                    });
+                    await batch.commit();
+                    saved += chunk.length;
+                }
+                showAlert('invoicesAlert', `تم إدراج ${saved} سطر في الفواتير من ${fileName}`);
+                showAlert('statementsAlert', `تم إدراج ${saved} سطر في الفواتير من ${fileName}`);
+                closeModal('statementPreviewModal');
+                pendingStatement = null;
+            } catch (err) {
+                alert('خطأ في الحفظ: ' + err.message);
+            }
+        }
+
+        // ========================================
+        // Statements view (filtered invoices with sourceFile)
+        // ========================================
+        function loadStatements() {
+            const tbody = document.querySelector('#statementsTable tbody');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+            let items = filterMine(db.invoices, ['clientId', 'counterpartyClientId'])
+                .filter(i => i.sourceFile);
+
+            // Apply search filter
+            const searchEl = document.getElementById('statementSearch');
+            const q = searchEl ? searchEl.value.trim().toLowerCase() : '';
+            if (q) {
+                items = items.filter(i =>
+                    (i.description || '').toLowerCase().includes(q) ||
+                    (i.reference || '').toLowerCase().includes(q) ||
+                    (i.sourceFile || '').toLowerCase().includes(q)
+                );
+            }
+
+            // Sort by date desc
+            items.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+            items.forEach(inv => {
+                const client = db.clients.find(c => c.id == inv.clientId);
+                const counter = db.clients.find(c => c.id == inv.counterpartyClientId);
+                const amount = Number(inv.amount) || 0;
+                const paid = Number(inv.paid) || 0;
+                const remaining = (typeof inv.remaining === 'number') ? inv.remaining : (amount - paid);
+                const tr = tbody.insertRow();
+                tr.innerHTML = `
+                    <td>${inv.date || '-'}</td>
+                    <td>${client ? client.name : '-'}</td>
+                    <td>${counter ? counter.name : '-'}</td>
+                    <td>${inv.reference || '-'}</td>
+                    <td>${inv.description || '-'}</td>
+                    <td>${amount.toFixed(2)}</td>
+                    <td>${paid.toFixed(2)}</td>
+                    <td>${remaining.toFixed(2)}</td>
+                    <td>${inv.sourceFile || '-'}</td>
+                    <td>
+                        <button class="btn btn-primary btn-small" onclick="editInvoice('${inv.id}')" title="تعديل"><i class="fas fa-edit"></i></button>
+                        ${remaining > 0 ? `<button class="btn btn-success btn-small" onclick="createSettlementFromInvoice('${inv.id}')" title="إقرار بالمبلغ المتبقي"><i class="fas fa-file-signature"></i></button>` : ''}
+                        <button class="btn btn-danger btn-small" onclick="deleteInvoice('${inv.id}')" title="حذف"><i class="fas fa-trash"></i></button>
+                    </td>
+                `;
+            });
+
+            const countEl = document.getElementById('statementsCount');
+            if (countEl) countEl.textContent = items.length;
+        }
+
+        function filterStatementsTable() {
+            loadStatements();
+        }
+
+        // ========================================
+        // Create Settlement from invoice remaining
+        // ========================================
+        function createSettlementFromInvoice(invoiceId) {
+            const inv = db.invoices.find(i => i.id == invoiceId);
+            if (!inv) return;
+            const amount = Number(inv.amount) || 0;
+            const paid = Number(inv.paid) || 0;
+            const remaining = (typeof inv.remaining === 'number') ? inv.remaining : (amount - paid);
+            if (remaining <= 0) {
+                alert('لا يوجد مبلغ متبقٍ على هذه الفاتورة');
+                return;
+            }
+            openSettlementModal();
+            // Pre-fill the settlement modal
+            const sc = document.getElementById('settlementClient');
+            if (sc) sc.value = inv.clientId || '';
+            document.getElementById('settlementTotal').value = remaining.toFixed(2);
+            document.getElementById('settlementPaid').value = '0';
+            document.getElementById('settlementDate').valueAsDate = new Date();
+            document.getElementById('settlementStatus').value = 'قيد المراجعة';
+            const notesEl = document.getElementById('settlementNotes');
+            const client = db.clients.find(c => c.id == inv.clientId);
+            const counter = db.clients.find(c => c.id == inv.counterpartyClientId);
+            const counterText = counter ? ` مع ${counter.name}` : '';
+            if (notesEl) {
+                notesEl.value = `إقرار بالمبلغ المتبقي من فاتورة INV-${String(inv.id).substring(0,8)}${counterText}` +
+                    (inv.sourceFile ? ` (مصدر: ${inv.sourceFile})` : '') +
+                    `\nالمبلغ الأصلي: ${amount.toFixed(2)} — المدفوع: ${paid.toFixed(2)} — المتبقي: ${remaining.toFixed(2)}`;
+            }
+        }
+
+        function createSettlementFromReport(clientId, counterpartyId, remaining, totalAmount, totalPaid) {
+            if (remaining <= 0) { alert('لا يوجد مبلغ متبقٍ'); return; }
+            openSettlementModal();
+            const sc = document.getElementById('settlementClient');
+            if (sc) sc.value = clientId || '';
+            document.getElementById('settlementTotal').value = Number(remaining).toFixed(2);
+            document.getElementById('settlementPaid').value = '0';
+            document.getElementById('settlementDate').valueAsDate = new Date();
+            document.getElementById('settlementStatus').value = 'قيد المراجعة';
+            const notesEl = document.getElementById('settlementNotes');
+            const client = db.clients.find(c => c.id == clientId);
+            const counter = db.clients.find(c => c.id == counterpartyId);
+            const counterText = counter ? ` مع ${counter.name}` : '';
+            if (notesEl) {
+                notesEl.value = `إقرار بالمبلغ المتبقي${counterText}` +
+                    `\nإجمالي: ${Number(totalAmount).toFixed(2)} — مدفوع: ${Number(totalPaid).toFixed(2)} — متبقٍ: ${Number(remaining).toFixed(2)}`;
+            }
         }
 
         function exportTable(tableType) {
