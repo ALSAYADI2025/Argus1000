@@ -480,6 +480,149 @@
         .section { display: none; }
         .section.active { display: block; }
 
+        /* ========== Loading Spinner (global overlay) ========== */
+        .global-loading {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 9999;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 14px;
+            color: white;
+            font-size: 14px;
+        }
+        .global-loading.show { display: flex; }
+        .global-loading .spinner-large {
+            width: 56px;
+            height: 56px;
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: gl-spin 0.8s linear infinite;
+        }
+        @keyframes gl-spin { to { transform: rotate(360deg); } }
+
+        /* ========== Empty State ========== */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #888;
+        }
+        .empty-state i {
+            font-size: 48px;
+            color: #ddd;
+            margin-bottom: 12px;
+            display: block;
+        }
+        .empty-state p { font-size: 14px; }
+
+        /* ========== Sortable headers ========== */
+        table th.sortable {
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+            padding-left: 24px !important;
+        }
+        table th.sortable:hover { background: linear-gradient(135deg, #245c3a 0%, #143420 100%); }
+        table th.sortable::after {
+            content: '⇅';
+            margin-right: 6px;
+            opacity: 0.4;
+            font-size: 11px;
+        }
+        table th.sortable.sort-asc::after { content: '↑'; opacity: 1; color: var(--accent); }
+        table th.sortable.sort-desc::after { content: '↓'; opacity: 1; color: var(--accent); }
+
+        /* ========== Pagination ========== */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 5px;
+            margin-top: 18px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .pagination button {
+            padding: 6px 12px;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            min-width: 34px;
+            color: var(--text);
+            transition: all 0.15s;
+        }
+        .pagination button:hover:not(:disabled) {
+            background: #f5f5f5;
+            border-color: var(--primary);
+        }
+        .pagination button.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+            font-weight: bold;
+        }
+        .pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
+        .pagination .info {
+            padding: 0 10px;
+            font-size: 12px;
+            color: #666;
+        }
+
+        /* ========== Search Dropdown ========== */
+        .header-center { position: relative; }
+        .search-dropdown {
+            position: absolute;
+            top: calc(100% + 6px);
+            right: 0;
+            left: 0;
+            max-height: 420px;
+            overflow-y: auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.25);
+            display: none;
+            z-index: 250;
+            color: var(--text);
+        }
+        .search-dropdown.show { display: block; }
+        .search-section-title {
+            padding: 8px 14px;
+            font-size: 11px;
+            font-weight: bold;
+            color: white;
+            background: var(--primary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .search-result {
+            padding: 10px 14px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .search-result:hover { background: #f8f8f8; }
+        .search-result .name {
+            font-weight: 600;
+            color: var(--primary);
+            font-size: 13px;
+        }
+        .search-result .detail {
+            font-size: 11px;
+            color: #888;
+            margin-top: 3px;
+        }
+        .search-empty {
+            padding: 30px 20px;
+            text-align: center;
+            color: #888;
+            font-size: 13px;
+        }
+
         /* ========== Role-based visibility ========== */
         /* Hidden until role is determined to prevent flicker */
         body:not(.role-admin) .admin-only { display: none !important; }
@@ -717,7 +860,8 @@
         </div>
 
         <div class="header-center">
-            <input type="text" class="search-box" id="searchBox" placeholder="ابحث...">
+            <input type="text" class="search-box" id="searchBox" placeholder="ابحث في العملاء، الفواتير، القضايا..." oninput="performGlobalSearch()" onfocus="performGlobalSearch()">
+            <div id="searchDropdown" class="search-dropdown"></div>
         </div>
 
         <div class="header-right">
@@ -891,11 +1035,11 @@
                         <table id="clientsTable">
                             <thead>
                                 <tr>
-                                    <th>الاسم</th>
-                                    <th>البريد</th>
+                                    <th class="sortable" data-sort-key="name" onclick="sortTable('clientsTable','name')">الاسم</th>
+                                    <th class="sortable" data-sort-key="email" onclick="sortTable('clientsTable','email')">البريد</th>
                                     <th>الهاتف</th>
-                                    <th>البنك</th>
-                                    <th>الحالة</th>
+                                    <th class="sortable" data-sort-key="bank" onclick="sortTable('clientsTable','bank')">البنك</th>
+                                    <th class="sortable" data-sort-key="status" onclick="sortTable('clientsTable','status')">الحالة</th>
                                     <th>الإجراءات</th>
                                 </tr>
                             </thead>
@@ -957,14 +1101,14 @@
                             <thead>
                                 <tr>
                                     <th>الرقم</th>
-                                    <th>العميل</th>
-                                    <th>الخصم</th>
-                                    <th>المبلغ</th>
-                                    <th>المدفوع</th>
-                                    <th>المتبقي</th>
+                                    <th class="sortable" data-sort-key="clientName" onclick="sortTable('invoicesTable','clientName')">العميل</th>
+                                    <th class="sortable" data-sort-key="counterpartyName" onclick="sortTable('invoicesTable','counterpartyName')">الخصم</th>
+                                    <th class="sortable" data-sort-key="amount" onclick="sortTable('invoicesTable','amount')">المبلغ</th>
+                                    <th class="sortable" data-sort-key="paid" onclick="sortTable('invoicesTable','paid')">المدفوع</th>
+                                    <th class="sortable" data-sort-key="remaining" onclick="sortTable('invoicesTable','remaining')">المتبقي</th>
                                     <th>البيان</th>
-                                    <th>التاريخ</th>
-                                    <th>الحالة</th>
+                                    <th class="sortable" data-sort-key="date" onclick="sortTable('invoicesTable','date')">التاريخ</th>
+                                    <th class="sortable" data-sort-key="status" onclick="sortTable('invoicesTable','status')">الحالة</th>
                                     <th>الإجراءات</th>
                                 </tr>
                             </thead>
@@ -1252,8 +1396,15 @@
                     <div class="card-header">
                         <h2>نظرة بيانية</h2>
                     </div>
-                    <div style="height: 280px;">
-                        <canvas id="reportsChart"></canvas>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+                        <div style="height: 280px;">
+                            <h4 style="text-align:center;font-size:13px;color:#666;margin-bottom:10px;">التوزيع الإجمالي</h4>
+                            <canvas id="reportsChart"></canvas>
+                        </div>
+                        <div style="height: 280px;">
+                            <h4 style="text-align:center;font-size:13px;color:#666;margin-bottom:10px;">الاتجاه الشهري</h4>
+                            <canvas id="reportsTrendChart"></canvas>
+                        </div>
                     </div>
                 </div>
 
@@ -1485,7 +1636,7 @@
                 <input type="hidden" id="settlementId">
                 <div class="form-group admin-only">
                     <label>العميل *</label>
-                    <select id="settlementClient"></select>
+                    <select id="settlementClient" onchange="refreshSettlementInvoiceList()"></select>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
@@ -1494,7 +1645,7 @@
                     </div>
                     <div class="form-group">
                         <label>المبلغ المسدد *</label>
-                        <input type="number" id="settlementPaid" step="0.01" required>
+                        <input type="number" id="settlementPaid" step="0.01" required oninput="distributeSettlementPaid()">
                     </div>
                 </div>
                 <div class="form-row">
@@ -1511,6 +1662,19 @@
                         </select>
                     </div>
                 </div>
+
+                <!-- Invoice linking section -->
+                <div class="form-group" id="settlementInvoicesGroup">
+                    <label>تطبيق المبلغ على فواتير محددة (اختياري)</label>
+                    <small style="display:block;color:#666;font-size:11px;margin-bottom:8px;">حدّد الفواتير غير المسددة وحدّد المبلغ المُطبَّق على كل فاتورة. عند الحفظ، يتم تعليم الفواتير كمسددة جزئياً/كلياً تلقائياً.</small>
+                    <div id="settlementInvoiceList" style="max-height: 200px; overflow-y: auto; border:1px solid #e5e5e5; border-radius:6px; padding: 8px; background:#fafafa;">
+                        <p style="color:#888; font-size:12px; text-align:center; margin:10px 0;">اختر العميل لعرض فواتيره غير المسددة</p>
+                    </div>
+                    <div style="margin-top:6px; font-size:12px; color:#666;">
+                        إجمالي المطبَّق: <strong id="settlementAppliedTotal">0.00</strong> ر.س
+                    </div>
+                </div>
+
                 <div class="form-group">
                     <label>ملاحظات</label>
                     <textarea id="settlementNotes" rows="3"></textarea>
@@ -2001,7 +2165,27 @@
             if (!tbody) return;
             tbody.innerHTML = '';
 
-            db.clients.forEach(client => {
+            let items = filterMine(db.clients, ['id']); // admin sees all; client sees only own
+            const accessors = {
+                name: (c) => c.name || '',
+                email: (c) => c.email || '',
+                bank: (c) => c.bank || '',
+                status: (c) => c.status || ''
+            };
+            items = applySort(items, 'clientsTable', accessors);
+            const total = items.length;
+            const { items: pageItems, totalPages } = applyPagination(items, 'clientsTable');
+
+            if (pageItems.length === 0) {
+                renderEmptyState(tbody, 6, 'لا يوجد عملاء. أضف عميل جديد للبدء.', 'fa-users');
+                renderPagination('clientsTable', totalPages, total);
+                updateSortHeaderUI('clientsTable');
+                const cEl = document.getElementById('clientsCount');
+                if (cEl) cEl.textContent = total;
+                return;
+            }
+
+            pageItems.forEach(client => {
                 const row = tbody.insertRow();
                 row.innerHTML = `
                     <td>${client.name}</td>
@@ -2020,7 +2204,10 @@
                 `;
             });
 
-            document.getElementById('clientsCount').textContent = db.clients.length;
+            renderPagination('clientsTable', totalPages, total);
+            updateSortHeaderUI('clientsTable');
+            const cEl = document.getElementById('clientsCount');
+            if (cEl) cEl.textContent = total;
         }
 
         function editClient(id) {
@@ -2099,8 +2286,26 @@
             if (!tbody) return;
             tbody.innerHTML = '';
 
-            const items = filterMine(db.transactions);
-            items.forEach(trans => {
+            let items = filterMine(db.transactions);
+            const accessors = {
+                clientName: (t) => { const c = db.clients.find(x => x.id == t.clientId); return c ? c.name : ''; },
+                amount: (t) => Number(t.amount) || 0,
+                type: (t) => t.type || '',
+                date: (t) => t.date || ''
+            };
+            items = applySort(items, 'transactionsTable', accessors);
+            const total = items.length;
+            const { items: pageItems, totalPages } = applyPagination(items, 'transactionsTable');
+
+            if (pageItems.length === 0) {
+                renderEmptyState(tbody, 7, 'لا توجد عمليات مالية.', 'fa-exchange-alt');
+                renderPagination('transactionsTable', totalPages, total);
+                updateSortHeaderUI('transactionsTable');
+                const cE = document.getElementById('transactionsCount');
+                if (cE) cE.textContent = total;
+                return;
+            }
+            pageItems.forEach(trans => {
                 const client = db.clients.find(c => c.id == trans.clientId);
                 const row = tbody.insertRow();
                 row.innerHTML = `
@@ -2121,7 +2326,10 @@
                 `;
             });
 
-            document.getElementById('transactionsCount').textContent = items.length;
+            renderPagination('transactionsTable', totalPages, total);
+            updateSortHeaderUI('transactionsTable');
+            const txEl = document.getElementById('transactionsCount');
+            if (txEl) txEl.textContent = total;
         }
 
         function editTransaction(id) {
@@ -2213,41 +2421,55 @@
             if (!tbody) return;
             tbody.innerHTML = '';
 
-            const items = filterMine(db.invoices, ['clientId', 'counterpartyClientId']);
-            items.forEach(inv => {
-                const client = db.clients.find(c => c.id == inv.clientId);
-                const counter = db.clients.find(c => c.id == inv.counterpartyClientId);
-                const amount = Number(inv.amount) || 0;
-                const paid = Number(inv.paid) || 0;
-                const remaining = (typeof inv.remaining === 'number') ? inv.remaining : (amount - paid);
-                const statusClass = inv.status === 'مدفوعة' ? 'completed' : (inv.status === 'مدفوعة جزئياً' ? 'pending' : 'pending');
-                const row = tbody.insertRow();
-                row.innerHTML = `
-                    <td>INV-${String(inv.id).substring(0, 8)}</td>
-                    <td>${client ? client.name : '-'}</td>
-                    <td>${counter ? counter.name : '-'}</td>
-                    <td>${amount.toFixed(2)} ر.س</td>
-                    <td>${paid.toFixed(2)} ر.س</td>
-                    <td>${remaining.toFixed(2)} ر.س</td>
-                    <td>${inv.description || '-'}</td>
-                    <td>${inv.date || '-'}</td>
-                    <td><span class="status-badge status-${statusClass}">${inv.status || '-'}</span></td>
-                    <td>
-                        <button class="btn btn-primary btn-small" onclick="editInvoice('${inv.id}')" title="تعديل">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        ${remaining > 0 ? `<button class="btn btn-success btn-small" onclick="createSettlementFromInvoice('${inv.id}')" title="إقرار بالمبلغ المتبقي">
-                            <i class="fas fa-file-signature"></i>
-                        </button>` : ''}
-                        <button class="btn btn-danger btn-small" onclick="deleteInvoice('${inv.id}')" title="حذف">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </td>
-                `;
-            });
+            let items = filterMine(db.invoices, ['clientId', 'counterpartyClientId']);
+            const accessors = {
+                clientName: (i) => { const c = db.clients.find(x => x.id == i.clientId); return c ? c.name : ''; },
+                counterpartyName: (i) => { const c = db.clients.find(x => x.id == i.counterpartyClientId); return c ? c.name : ''; },
+                amount: (i) => Number(i.amount) || 0,
+                paid: (i) => Number(i.paid) || 0,
+                remaining: (i) => (Number(i.amount) || 0) - (Number(i.paid) || 0),
+                date: (i) => i.date || '',
+                status: (i) => i.status || ''
+            };
+            items = applySort(items, 'invoicesTable', accessors);
+            const total = items.length;
+            const { items: pageItems, totalPages } = applyPagination(items, 'invoicesTable');
 
+            if (pageItems.length === 0) {
+                renderEmptyState(tbody, 10, 'لا توجد فواتير. أضف فاتورة جديدة أو ارفع كشف.', 'fa-file-invoice');
+            } else {
+                pageItems.forEach(inv => {
+                    const client = db.clients.find(c => c.id == inv.clientId);
+                    const counter = db.clients.find(c => c.id == inv.counterpartyClientId);
+                    const amount = Number(inv.amount) || 0;
+                    const paid = Number(inv.paid) || 0;
+                    const remaining = (typeof inv.remaining === 'number') ? inv.remaining : (amount - paid);
+                    const statusClass = inv.status === 'مدفوعة' ? 'completed' : 'pending';
+                    const row = tbody.insertRow();
+                    row.innerHTML = `
+                        <td>INV-${String(inv.id).substring(0, 8)}</td>
+                        <td>${client ? client.name : '-'}</td>
+                        <td>${counter ? counter.name : '-'}</td>
+                        <td>${amount.toFixed(2)} ر.س</td>
+                        <td>${paid.toFixed(2)} ر.س</td>
+                        <td style="color:${remaining > 0 ? '#dc2626' : '#10b981'};font-weight:bold;">${remaining.toFixed(2)} ر.س</td>
+                        <td>${inv.description || '-'}</td>
+                        <td>${inv.date || '-'}</td>
+                        <td><span class="status-badge status-${statusClass}">${inv.status || '-'}</span></td>
+                        <td>
+                            <button class="btn btn-primary btn-small" onclick="editInvoice('${inv.id}')" title="تعديل"><i class="fas fa-edit"></i></button>
+                            <button class="btn btn-secondary btn-small" onclick="exportInvoicePDF('${inv.id}')" title="PDF"><i class="fas fa-file-pdf"></i></button>
+                            ${remaining > 0 ? `<button class="btn btn-success btn-small" onclick="createSettlementFromInvoice('${inv.id}')" title="إقرار بالمبلغ المتبقي"><i class="fas fa-file-signature"></i></button>` : ''}
+                            <button class="btn btn-danger btn-small" onclick="deleteInvoice('${inv.id}')" title="حذف"><i class="fas fa-trash"></i></button>
+                        </td>
+                    `;
+                });
+            }
+
+            renderPagination('invoicesTable', totalPages, total);
+            updateSortHeaderUI('invoicesTable');
             const countEl = document.getElementById('invoicesCount');
-            if (countEl) countEl.textContent = items.length;
+            if (countEl) countEl.textContent = total;
         }
 
         function editInvoice(id) {
@@ -2328,8 +2550,27 @@
             if (!tbody) return;
             tbody.innerHTML = '';
 
-            const items = filterMine(db.cases);
-            items.forEach(caseData => {
+            let items = filterMine(db.cases);
+            const accessors = {
+                title: (c) => c.title || '',
+                party1: (c) => c.party1 || '',
+                party2: (c) => c.party2 || '',
+                status: (c) => c.status || '',
+                priority: (c) => c.priority || ''
+            };
+            items = applySort(items, 'casesTable', accessors);
+            const total = items.length;
+            const { items: pageItems, totalPages } = applyPagination(items, 'casesTable');
+
+            if (pageItems.length === 0) {
+                renderEmptyState(tbody, 7, 'لا توجد قضايا.', 'fa-gavel');
+                renderPagination('casesTable', totalPages, total);
+                updateSortHeaderUI('casesTable');
+                const cCE = document.getElementById('casesCount');
+                if (cCE) cCE.textContent = total;
+                return;
+            }
+            pageItems.forEach(caseData => {
                 const row = tbody.insertRow();
                 row.innerHTML = `
                     <td>CASE-${String(caseData.id).substring(0, 8)}</td>
@@ -2349,7 +2590,10 @@
                 `;
             });
 
-            document.getElementById('casesCount').textContent = items.length;
+            renderPagination('casesTable', totalPages, total);
+            updateSortHeaderUI('casesTable');
+            const ccEl = document.getElementById('casesCount');
+            if (ccEl) ccEl.textContent = total;
         }
 
         function editCase(id) {
@@ -2390,7 +2634,99 @@
             document.getElementById('settlementDate').valueAsDate = new Date();
             document.getElementById('settlementStatus').value = 'نشط';
             document.getElementById('settlementNotes').value = '';
+            // Reset invoice list
+            const list = document.getElementById('settlementInvoiceList');
+            if (list) list.innerHTML = '<p style="color:#888; font-size:12px; text-align:center; margin:10px 0;">اختر العميل لعرض فواتيره غير المسددة</p>';
+            const at = document.getElementById('settlementAppliedTotal');
+            if (at) at.textContent = '0.00';
             openModal('settlementModal');
+            // For client role, the clientId is already set; load their invoices
+            if (isClient()) setTimeout(() => refreshSettlementInvoiceList(), 100);
+        }
+
+        function refreshSettlementInvoiceList() {
+            const clientId = isClient() ? currentUser.clientId : document.getElementById('settlementClient').value;
+            const list = document.getElementById('settlementInvoiceList');
+            if (!list) return;
+            if (!clientId) {
+                list.innerHTML = '<p style="color:#888; font-size:12px; text-align:center; margin:10px 0;">اختر العميل لعرض فواتيره غير المسددة</p>';
+                return;
+            }
+            // Get unpaid invoices for this client (either as primary or counterparty)
+            const invoices = db.invoices
+                .filter(i => i.clientId === clientId || i.counterpartyClientId === clientId)
+                .filter(i => {
+                    const remaining = (Number(i.amount)||0) - (Number(i.paid)||0);
+                    return remaining > 0.01;
+                })
+                .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+
+            if (invoices.length === 0) {
+                list.innerHTML = '<p style="color:#888; font-size:12px; text-align:center; margin:10px 0;">لا توجد فواتير غير مسددة لهذا العميل</p>';
+                return;
+            }
+
+            const rows = invoices.map(inv => {
+                const counter = db.clients.find(c => c.id == inv.counterpartyClientId);
+                const remaining = (Number(inv.amount)||0) - (Number(inv.paid)||0);
+                return `<div style="display:flex; align-items:center; gap:8px; padding:6px 4px; border-bottom:1px solid #eee;" data-invoice-id="${inv.id}" data-remaining="${remaining}">
+                    <input type="checkbox" class="settlement-inv-check" onchange="onInvoiceCheckChange(this)" style="width:auto;margin:0;">
+                    <div style="flex:1; font-size:12px;">
+                        <div><strong>INV-${String(inv.id).substring(0,8)}</strong> ${inv.date ? '· ' + inv.date : ''} ${counter ? '· مع ' + counter.name : ''}</div>
+                        <div style="color:#888; font-size:11px;">${(inv.description || inv.reference || '').substring(0,50)}</div>
+                        <div style="color:#dc2626; font-size:11px;">متبقي: ${remaining.toFixed(2)} ر.س</div>
+                    </div>
+                    <input type="number" step="0.01" min="0" max="${remaining}" placeholder="المبلغ" disabled class="settlement-inv-amount" style="width:90px; font-size:12px;" oninput="updateAppliedTotal()">
+                </div>`;
+            }).join('');
+            list.innerHTML = rows;
+        }
+
+        function onInvoiceCheckChange(checkbox) {
+            const row = checkbox.closest('[data-invoice-id]');
+            const input = row.querySelector('.settlement-inv-amount');
+            if (checkbox.checked) {
+                input.disabled = false;
+                input.value = row.dataset.remaining;
+            } else {
+                input.disabled = true;
+                input.value = '';
+            }
+            updateAppliedTotal();
+        }
+
+        function updateAppliedTotal() {
+            const list = document.getElementById('settlementInvoiceList');
+            if (!list) return;
+            let total = 0;
+            list.querySelectorAll('.settlement-inv-check:checked').forEach(cb => {
+                const row = cb.closest('[data-invoice-id]');
+                const input = row.querySelector('.settlement-inv-amount');
+                total += parseFloat(input.value) || 0;
+            });
+            const el = document.getElementById('settlementAppliedTotal');
+            if (el) el.textContent = total.toFixed(2);
+        }
+
+        function distributeSettlementPaid() {
+            // Auto-distribute the "paid" amount across checked invoices (FIFO)
+            const paidEl = document.getElementById('settlementPaid');
+            const paid = parseFloat(paidEl.value) || 0;
+            const list = document.getElementById('settlementInvoiceList');
+            if (!list || paid <= 0) return;
+            const checked = list.querySelectorAll('.settlement-inv-check:checked');
+            if (checked.length === 0) return;
+            // Only auto-distribute if all amount inputs are empty/equal-to-remaining (user hasn't manually edited)
+            let remaining = paid;
+            checked.forEach(cb => {
+                const row = cb.closest('[data-invoice-id]');
+                const input = row.querySelector('.settlement-inv-amount');
+                const max = parseFloat(row.dataset.remaining);
+                const apply = Math.min(remaining, max);
+                input.value = apply.toFixed(2);
+                remaining -= apply;
+            });
+            updateAppliedTotal();
         }
 
         async function saveSettlement(event) {
@@ -2399,26 +2735,69 @@
             const id = document.getElementById('settlementId').value;
             const total = parseFloat(document.getElementById('settlementTotal').value);
             const paid = parseFloat(document.getElementById('settlementPaid').value);
+            const clientId = getClientIdForSave('settlementClient');
+
+            // Collect linked invoice applications
+            const linkedInvoices = [];
+            const list = document.getElementById('settlementInvoiceList');
+            if (list) {
+                list.querySelectorAll('.settlement-inv-check:checked').forEach(cb => {
+                    const row = cb.closest('[data-invoice-id]');
+                    const input = row.querySelector('.settlement-inv-amount');
+                    const amount = parseFloat(input.value) || 0;
+                    if (amount > 0) {
+                        linkedInvoices.push({
+                            invoiceId: row.dataset.invoiceId,
+                            applied: amount
+                        });
+                    }
+                });
+            }
+
             const settlement = {
-                clientId: getClientIdForSave('settlementClient'),
+                clientId,
                 total: total,
                 paid: paid,
                 remaining: total - paid,
                 date: document.getElementById('settlementDate').value,
                 status: document.getElementById('settlementStatus').value,
-                notes: document.getElementById('settlementNotes').value
+                notes: document.getElementById('settlementNotes').value,
+                linkedInvoices
             };
 
+            showLoading('جاري الحفظ...');
             try {
                 if (id) {
                     await db.update('settlements', id, settlement);
                 } else {
                     await db.add('settlements', settlement);
                 }
-                showAlert('settlementsAlert', 'تم حفظ الإقرار بنجاح');
+
+                // Update linked invoices' paid amounts (only for new settlements, not edits)
+                if (!id && linkedInvoices.length > 0 && firebaseReady) {
+                    for (const link of linkedInvoices) {
+                        const inv = db.invoices.find(i => i.id === link.invoiceId);
+                        if (!inv) continue;
+                        const newPaid = (Number(inv.paid) || 0) + link.applied;
+                        const amount = Number(inv.amount) || 0;
+                        const newRemaining = amount - newPaid;
+                        const newStatus = computeInvoiceStatus(amount, newPaid);
+                        await firestore.collection('invoices').doc(link.invoiceId).update({
+                            paid: newPaid,
+                            remaining: newRemaining,
+                            status: newStatus
+                        });
+                    }
+                }
+
+                showAlert('settlementsAlert', linkedInvoices.length > 0
+                    ? `تم حفظ الإقرار وتحديث ${linkedInvoices.length} فاتورة`
+                    : 'تم حفظ الإقرار بنجاح');
                 closeModal('settlementModal');
             } catch (err) {
                 showAlert('settlementsAlert', 'خطأ في الحفظ: ' + err.message);
+            } finally {
+                hideLoading();
             }
         }
 
@@ -2427,8 +2806,27 @@
             if (!tbody) return;
             tbody.innerHTML = '';
 
-            const items = filterMine(db.settlements);
-            items.forEach(settlement => {
+            let items = filterMine(db.settlements);
+            const accessors = {
+                date: (s) => s.date || '',
+                total: (s) => Number(s.total) || 0,
+                paid: (s) => Number(s.paid) || 0,
+                remaining: (s) => Number(s.remaining) || 0,
+                status: (s) => s.status || ''
+            };
+            items = applySort(items, 'settlementsTable', accessors);
+            const total = items.length;
+            const { items: pageItems, totalPages } = applyPagination(items, 'settlementsTable');
+
+            if (pageItems.length === 0) {
+                renderEmptyState(tbody, 8, 'لا توجد إقرارات مخالصة.', 'fa-file-contract');
+                renderPagination('settlementsTable', totalPages, total);
+                updateSortHeaderUI('settlementsTable');
+                const sCE = document.getElementById('settlementsCount');
+                if (sCE) sCE.textContent = total;
+                return;
+            }
+            pageItems.forEach(settlement => {
                 const client = db.clients.find(c => c.id == settlement.clientId);
                 const row = tbody.insertRow();
                 row.innerHTML = `
@@ -2443,8 +2841,8 @@
                         <button class="btn btn-primary btn-small" onclick="editSettlement('${settlement.id}')">
                             <i class="fas fa-edit"></i>
                         </button>
-                        <button class="btn btn-success btn-small" onclick="printSettlementCert('${settlement.id}')">
-                            <i class="fas fa-print"></i>
+                        <button class="btn btn-success btn-small" onclick="printSettlementCert('${settlement.id}')" title="تصدير PDF">
+                            <i class="fas fa-file-pdf"></i>
                         </button>
                         <button class="btn btn-danger btn-small" onclick="deleteSettlement('${settlement.id}')">
                             <i class="fas fa-trash"></i>
@@ -2453,7 +2851,10 @@
                 `;
             });
 
-            document.getElementById('settlementsCount').textContent = items.length;
+            renderPagination('settlementsTable', totalPages, total);
+            updateSortHeaderUI('settlementsTable');
+            const stEl = document.getElementById('settlementsCount');
+            if (stEl) stEl.textContent = total;
         }
 
         function editSettlement(id) {
@@ -2494,36 +2895,125 @@
             });
         }
 
-        function printSettlementCert(id) {
-            const settlement = db.settlements.find(s => s.id == id);
-            const client = db.clients.find(c => c.id == settlement.clientId);
+        function buildSettlementHTML(settlement, client) {
+            const linkedHTML = (settlement.linkedInvoices && settlement.linkedInvoices.length > 0)
+                ? `<h3 style="margin-top:30px;border-bottom:1px solid #ccc;padding-bottom:5px;">الفواتير المرتبطة</h3>
+                   <table style="width:100%; border-collapse: collapse; margin-top:10px;">
+                     <thead><tr style="background:#1a4d2e;color:white;">
+                       <th style="border:1px solid #ccc;padding:8px;text-align:right;">رقم الفاتورة</th>
+                       <th style="border:1px solid #ccc;padding:8px;text-align:right;">المبلغ المُطبَّق</th>
+                     </tr></thead>
+                     <tbody>
+                       ${settlement.linkedInvoices.map(l => `
+                         <tr>
+                           <td style="border:1px solid #ccc;padding:8px;">INV-${String(l.invoiceId).substring(0, 8)}</td>
+                           <td style="border:1px solid #ccc;padding:8px;">${Number(l.applied || 0).toFixed(2)} ر.س</td>
+                         </tr>
+                       `).join('')}
+                     </tbody>
+                   </table>`
+                : '';
 
-            const content = `
-                <div style="padding: 40px; font-family: Arial;">
-                    <h1 style="text-align: center;">إقرار مخالصة</h1>
-                    <hr>
-                    <p style="text-align: right;">التاريخ: ${settlement.date}</p>
-                    <p style="text-align: right;">الرقم: SETL-${String(settlement.id).substring(0, 8)}</p>
-                    <hr>
-                    <p>أقر أنا <strong>${client.name}</strong></p>
-                    <p>برقم الهوية: <strong>${client.phone}</strong></p>
-                    <p>بأنني أملك ذمة مالية إجمالية قدرها: <strong>${settlement.total.toFixed(2)} ريال سعودي</strong></p>
-                    <p>وقد تم تسديد مبلغ: <strong>${settlement.paid.toFixed(2)} ريال سعودي</strong></p>
-                    <p>والرصيد المتبقي: <strong>${settlement.remaining.toFixed(2)} ريال سعودي</strong></p>
-                    <p>الحالة: <strong>${settlement.status}</strong></p>
-                    <p>الملاحظات: ${settlement.notes}</p>
-                    <hr style="margin-top: 60px;">
-                    <p style="text-align: center;">التوقيع: ___________________</p>
+            return `
+                <div style="padding: 30px; font-family: Arial, sans-serif; max-width:800px; margin: 0 auto;">
+                    <div style="text-align:center; border-bottom: 2px solid #1a4d2e; padding-bottom:15px; margin-bottom:25px;">
+                        <h1 style="color:#1a4d2e; margin:0;">إقرار مخالصة</h1>
+                        <p style="color:#666; font-size:13px; margin-top:5px;">نظام 1000 عين</p>
+                    </div>
+                    <div style="display:flex; justify-content: space-between; margin-bottom:20px; font-size:13px;">
+                        <div>
+                            <strong>رقم الإقرار:</strong> SETL-${String(settlement.id).substring(0, 8)}<br>
+                            <strong>التاريخ:</strong> ${settlement.date || '-'}
+                        </div>
+                        <div>
+                            <strong>الحالة:</strong> ${settlement.status || '-'}
+                        </div>
+                    </div>
+                    <h3 style="border-bottom:1px solid #ccc; padding-bottom:5px;">بيانات العميل</h3>
+                    <p>الاسم: <strong>${client ? client.name : '-'}</strong></p>
+                    <p>البريد: ${client ? (client.email || '-') : '-'}</p>
+                    <p>الهاتف: ${client ? (client.phone || '-') : '-'}</p>
+
+                    <h3 style="border-bottom:1px solid #ccc; padding-bottom:5px;margin-top:20px;">تفاصيل المخالصة</h3>
+                    <table style="width:100%; border-collapse:collapse;">
+                        <tr><td style="padding:8px; border:1px solid #ddd;">المبلغ الإجمالي</td><td style="padding:8px; border:1px solid #ddd; font-weight:bold;">${(Number(settlement.total)||0).toFixed(2)} ر.س</td></tr>
+                        <tr><td style="padding:8px; border:1px solid #ddd;">المبلغ المسدد</td><td style="padding:8px; border:1px solid #ddd; font-weight:bold; color:#10b981;">${(Number(settlement.paid)||0).toFixed(2)} ر.س</td></tr>
+                        <tr><td style="padding:8px; border:1px solid #ddd;">الرصيد المتبقي</td><td style="padding:8px; border:1px solid #ddd; font-weight:bold; color:#dc2626;">${(Number(settlement.remaining)||0).toFixed(2)} ر.س</td></tr>
+                    </table>
+
+                    ${settlement.notes ? `<h3 style="border-bottom:1px solid #ccc; padding-bottom:5px;margin-top:20px;">الملاحظات</h3>
+                    <p style="white-space: pre-wrap;">${settlement.notes}</p>` : ''}
+
+                    ${linkedHTML}
+
+                    <div style="margin-top:60px; display:flex; justify-content: space-between;">
+                        <div style="text-align:center;">
+                            <p>توقيع المُقرّ</p>
+                            <p>__________________</p>
+                        </div>
+                        <div style="text-align:center;">
+                            <p>توقيع المسؤول</p>
+                            <p>__________________</p>
+                        </div>
+                    </div>
                 </div>
             `;
+        }
 
-            const element = document.createElement('div');
-            element.innerHTML = content;
-            document.body.appendChild(element);
+        function printSettlementCert(id) {
+            const settlement = db.settlements.find(s => s.id == id);
+            if (!settlement) return;
+            const client = db.clients.find(c => c.id == settlement.clientId);
+            exportToPDF(buildSettlementHTML(settlement, client), `Settlement-${String(id).substring(0,8)}.pdf`);
+        }
 
-            window.print();
+        function exportInvoicePDF(invoiceId) {
+            const inv = db.invoices.find(i => i.id == invoiceId);
+            if (!inv) return;
+            const client = db.clients.find(c => c.id == inv.clientId);
+            const counter = db.clients.find(c => c.id == inv.counterpartyClientId);
+            const amount = Number(inv.amount) || 0;
+            const paid = Number(inv.paid) || 0;
+            const remaining = amount - paid;
 
-            document.body.removeChild(element);
+            const html = `
+                <div style="padding: 30px; font-family: Arial, sans-serif; max-width:800px; margin: 0 auto;">
+                    <div style="text-align:center; border-bottom: 2px solid #1a4d2e; padding-bottom:15px; margin-bottom:25px;">
+                        <h1 style="color:#1a4d2e; margin:0;">فاتورة</h1>
+                        <p style="color:#666; font-size:13px; margin-top:5px;">نظام 1000 عين</p>
+                    </div>
+                    <div style="display:flex; justify-content: space-between; margin-bottom:20px; font-size:13px;">
+                        <div>
+                            <strong>رقم الفاتورة:</strong> INV-${String(inv.id).substring(0, 8)}<br>
+                            <strong>التاريخ:</strong> ${inv.date || '-'}<br>
+                            ${inv.reference ? '<strong>المرجع:</strong> ' + inv.reference + '<br>' : ''}
+                        </div>
+                        <div>
+                            <strong>الحالة:</strong> ${inv.status || '-'}
+                        </div>
+                    </div>
+                    <h3 style="border-bottom:1px solid #ccc; padding-bottom:5px;">الأطراف</h3>
+                    <p><strong>العميل:</strong> ${client ? client.name : '-'}</p>
+                    ${counter ? `<p><strong>الخصم (الطرف الآخر):</strong> ${counter.name}</p>` : ''}
+
+                    ${inv.description ? `<h3 style="border-bottom:1px solid #ccc; padding-bottom:5px;margin-top:20px;">البيان</h3>
+                    <p style="white-space:pre-wrap;">${inv.description}</p>` : ''}
+
+                    <h3 style="border-bottom:1px solid #ccc; padding-bottom:5px;margin-top:20px;">المبالغ</h3>
+                    <table style="width:100%; border-collapse:collapse;">
+                        <tr><td style="padding:10px; border:1px solid #ddd;">المبلغ الإجمالي</td><td style="padding:10px; border:1px solid #ddd; font-weight:bold;">${amount.toFixed(2)} ر.س</td></tr>
+                        <tr><td style="padding:10px; border:1px solid #ddd;">المدفوع</td><td style="padding:10px; border:1px solid #ddd; font-weight:bold; color:#10b981;">${paid.toFixed(2)} ر.س</td></tr>
+                        <tr style="background:#fffbf0;"><td style="padding:10px; border:1px solid #ddd; font-weight:bold;">المتبقي</td><td style="padding:10px; border:1px solid #ddd; font-weight:bold; color:#dc2626; font-size:18px;">${remaining.toFixed(2)} ر.س</td></tr>
+                    </table>
+
+                    ${inv.sourceFile ? `<p style="margin-top:20px; font-size:11px; color:#888;">مصدر: ${inv.sourceFile}</p>` : ''}
+
+                    <div style="margin-top:60px; text-align:center;">
+                        <p>تم إصدارها بواسطة نظام 1000 عين</p>
+                    </div>
+                </div>
+            `;
+            exportToPDF(html, `Invoice-${String(invoiceId).substring(0,8)}.pdf`);
         }
 
         function printSettlement() {
@@ -2576,8 +3066,17 @@
             if (!tbody) return;
             tbody.innerHTML = '';
 
-            const items = filterMine(db.files);
-            items.forEach(file => {
+            let items = filterMine(db.files);
+            const total0 = items.length;
+            const { items: pageItems, totalPages } = applyPagination(items, 'filesTable');
+            if (pageItems.length === 0) {
+                renderEmptyState(tbody, 5, 'لا توجد ملفات.', 'fa-folder-open');
+                renderPagination('filesTable', totalPages, total0);
+                const fE = document.getElementById('filesCount');
+                if (fE) fE.textContent = total0;
+                return;
+            }
+            pageItems.forEach(file => {
                 const row = tbody.insertRow();
                 row.innerHTML = `
                     <td>${file.name}</td>
@@ -2592,7 +3091,9 @@
                 `;
             });
 
-            document.getElementById('filesCount').textContent = items.length;
+            renderPagination('filesTable', totalPages, total0);
+            const fE = document.getElementById('filesCount');
+            if (fE) fE.textContent = total0;
         }
 
         async function deleteFile(id) {
@@ -2718,7 +3219,12 @@
             if (!tbody) return;
             tbody.innerHTML = '';
 
-            db.users.forEach(user => {
+            const items = db.users || [];
+            if (items.length === 0) {
+                renderEmptyState(tbody, 5, 'لا يوجد مستخدمون.', 'fa-user-shield');
+                return;
+            }
+            items.forEach(user => {
                 const row = tbody.insertRow();
                 const roleLabel = user.role === 'admin' ? 'مدير' : (user.role === 'client' ? 'عميل' : user.role);
                 row.innerHTML = `
@@ -3159,6 +3665,60 @@
             if (countEl) countEl.textContent = `${tbody.rows.length} سجل`;
 
             updateReportsChart(type, totalAmount, totalPaid, totalRemaining);
+            updateReportsTrendChart(type, invoices);
+        }
+
+        let reportsTrendChart = null;
+        function updateReportsTrendChart(type, invoices) {
+            const ctx = document.getElementById('reportsTrendChart');
+            if (!ctx) return;
+            if (type !== 'summary' && type !== 'invoices' && type !== 'all') return;
+
+            // Group by year-month
+            const buckets = {};
+            invoices.forEach(inv => {
+                const date = inv.date || '';
+                if (!date) return;
+                const ym = date.substring(0, 7); // YYYY-MM
+                if (!buckets[ym]) buckets[ym] = { amount: 0, paid: 0 };
+                buckets[ym].amount += Number(inv.amount) || 0;
+                buckets[ym].paid += Number(inv.paid) || 0;
+            });
+
+            const labels = Object.keys(buckets).sort();
+            const amounts = labels.map(l => buckets[l].amount);
+            const paids = labels.map(l => buckets[l].paid);
+            const remainings = labels.map((l, i) => amounts[i] - paids[i]);
+
+            const data = {
+                labels,
+                datasets: [
+                    { label: 'المبلغ', data: amounts, borderColor: '#1a4d2e', backgroundColor: 'rgba(26,77,46,0.1)', borderWidth: 2, fill: true, tension: 0.3 },
+                    { label: 'المدفوع', data: paids, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.1)', borderWidth: 2, fill: true, tension: 0.3 },
+                    { label: 'المتبقي', data: remainings, borderColor: '#dc2626', backgroundColor: 'rgba(220,38,38,0.1)', borderWidth: 2, fill: false, tension: 0.3 }
+                ]
+            };
+
+            if (reportsTrendChart) {
+                reportsTrendChart.data = data;
+                reportsTrendChart.update();
+            } else {
+                reportsTrendChart = new Chart(ctx, {
+                    type: 'line',
+                    data,
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'bottom', labels: { font: { size: 11 } } }
+                        },
+                        scales: {
+                            y: { beginAtZero: true, ticks: { font: { size: 10 } } },
+                            x: { ticks: { font: { size: 10 } } }
+                        }
+                    }
+                });
+            }
         }
 
         function updateReportsChart(type, totalAmount, totalPaid, totalRemaining) {
@@ -3235,6 +3795,356 @@
             });
         }
 
+        // ========================================
+        // Loading Spinner
+        // ========================================
+        let loadingCount = 0;
+        function showLoading(message) {
+            loadingCount++;
+            let el = document.getElementById('globalLoading');
+            if (!el) {
+                el = document.createElement('div');
+                el.id = 'globalLoading';
+                el.className = 'global-loading';
+                el.innerHTML = '<div class="spinner-large"></div><div id="globalLoadingMsg"></div>';
+                document.body.appendChild(el);
+            }
+            const msgEl = document.getElementById('globalLoadingMsg');
+            if (msgEl) msgEl.textContent = message || 'جاري التحميل...';
+            el.classList.add('show');
+        }
+        function hideLoading() {
+            loadingCount = Math.max(0, loadingCount - 1);
+            if (loadingCount === 0) {
+                const el = document.getElementById('globalLoading');
+                if (el) el.classList.remove('show');
+            }
+        }
+
+        // ========================================
+        // Empty State
+        // ========================================
+        function renderEmptyState(tbody, colspan, message, icon) {
+            icon = icon || 'fa-inbox';
+            message = message || 'لا توجد بيانات';
+            tbody.innerHTML = `<tr><td colspan="${colspan}" style="background:white;">
+                <div class="empty-state">
+                    <i class="fas ${icon}"></i>
+                    <p>${message}</p>
+                </div>
+            </td></tr>`;
+        }
+
+        // ========================================
+        // Table sort + paginate state
+        // ========================================
+        const tableState = {};
+        const RELOAD_MAP = {
+            'invoicesTable': 'loadInvoices',
+            'clientsTable': 'loadClients',
+            'transactionsTable': 'loadTransactions',
+            'casesTable': 'loadCases',
+            'settlementsTable': 'loadSettlements',
+            'filesTable': 'loadFiles',
+            'usersTable': 'loadUsers',
+            'statementsTable': 'loadStatements',
+            'reportsTable': 'loadReports'
+        };
+
+        function getTableState(tableId) {
+            if (!tableState[tableId]) {
+                tableState[tableId] = { sortKey: '', sortDir: 'asc', page: 1, perPage: 50 };
+            }
+            return tableState[tableId];
+        }
+
+        function sortTable(tableId, sortKey) {
+            const state = getTableState(tableId);
+            if (state.sortKey === sortKey) {
+                state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                state.sortKey = sortKey;
+                state.sortDir = 'asc';
+            }
+            state.page = 1;
+            const fn = window[RELOAD_MAP[tableId]];
+            if (typeof fn === 'function') fn();
+        }
+
+        function applySort(items, tableId, accessors) {
+            const state = getTableState(tableId);
+            if (!state.sortKey || !accessors || !accessors[state.sortKey]) return items;
+            const accessor = accessors[state.sortKey];
+            const sorted = [...items].sort((a, b) => {
+                const va = accessor(a);
+                const vb = accessor(b);
+                if (va == null && vb == null) return 0;
+                if (va == null) return 1;
+                if (vb == null) return -1;
+                if (typeof va === 'number' && typeof vb === 'number') {
+                    return state.sortDir === 'asc' ? va - vb : vb - va;
+                }
+                const cmp = String(va).localeCompare(String(vb), 'ar');
+                return state.sortDir === 'asc' ? cmp : -cmp;
+            });
+            return sorted;
+        }
+
+        function applyPagination(items, tableId) {
+            const state = getTableState(tableId);
+            const total = items.length;
+            const totalPages = Math.max(1, Math.ceil(total / state.perPage));
+            if (state.page > totalPages) state.page = totalPages;
+            const start = (state.page - 1) * state.perPage;
+            return { items: items.slice(start, start + state.perPage), total, totalPages };
+        }
+
+        function renderPagination(tableId, totalPages, total) {
+            const state = getTableState(tableId);
+            const tableEl = document.getElementById(tableId);
+            if (!tableEl) return;
+            const wrapper = tableEl.closest('.card') || tableEl.parentElement;
+            let pagEl = wrapper.querySelector('.pagination');
+            if (totalPages <= 1) {
+                if (pagEl) pagEl.innerHTML = '';
+                return;
+            }
+            if (!pagEl) {
+                pagEl = document.createElement('div');
+                pagEl.className = 'pagination';
+                wrapper.appendChild(pagEl);
+            }
+            const buttons = [];
+            buttons.push(`<button onclick="changePage('${tableId}', 1)" ${state.page === 1 ? 'disabled' : ''} title="الأول">«</button>`);
+            buttons.push(`<button onclick="changePage('${tableId}', ${state.page - 1})" ${state.page === 1 ? 'disabled' : ''} title="السابق">‹</button>`);
+            let start = Math.max(1, state.page - 2);
+            let end = Math.min(totalPages, start + 4);
+            if (end - start < 4) start = Math.max(1, end - 4);
+            for (let i = start; i <= end; i++) {
+                buttons.push(`<button onclick="changePage('${tableId}', ${i})" class="${i === state.page ? 'active' : ''}">${i}</button>`);
+            }
+            buttons.push(`<button onclick="changePage('${tableId}', ${state.page + 1})" ${state.page === totalPages ? 'disabled' : ''} title="التالي">›</button>`);
+            buttons.push(`<button onclick="changePage('${tableId}', ${totalPages})" ${state.page === totalPages ? 'disabled' : ''} title="الأخير">»</button>`);
+            buttons.push(`<span class="info">${total} سجل · صفحة ${state.page} من ${totalPages}</span>`);
+            pagEl.innerHTML = buttons.join('');
+        }
+
+        function changePage(tableId, page) {
+            const state = getTableState(tableId);
+            state.page = page;
+            const fn = window[RELOAD_MAP[tableId]];
+            if (typeof fn === 'function') fn();
+        }
+
+        function updateSortHeaderUI(tableId) {
+            const state = getTableState(tableId);
+            const table = document.getElementById(tableId);
+            if (!table) return;
+            table.querySelectorAll('th.sortable').forEach(th => {
+                th.classList.remove('sort-asc', 'sort-desc');
+                if (th.dataset.sortKey === state.sortKey) {
+                    th.classList.add(state.sortDir === 'asc' ? 'sort-asc' : 'sort-desc');
+                }
+            });
+        }
+
+        // ========================================
+        // Global Header Search
+        // ========================================
+        function performGlobalSearch() {
+            const box = document.getElementById('searchBox');
+            const dd = document.getElementById('searchDropdown');
+            if (!box || !dd) return;
+            const q = box.value.trim().toLowerCase();
+            if (!q) {
+                dd.classList.remove('show');
+                dd.innerHTML = '';
+                return;
+            }
+
+            const matches = (s) => String(s || '').toLowerCase().includes(q);
+            const clients = filterMine(db.clients, ['id']).filter(c =>
+                matches(c.name) || matches(c.email) || matches(c.phone) || matches(c.bank)
+            );
+            const invoices = filterMine(db.invoices, ['clientId', 'counterpartyClientId']).filter(i =>
+                matches(i.description) || matches(i.reference) || matches(i.sourceFile)
+            );
+            const cases = filterMine(db.cases).filter(c =>
+                matches(c.title) || matches(c.party1) || matches(c.party2)
+            );
+            const settlements = filterMine(db.settlements).filter(s =>
+                matches(s.notes)
+            );
+
+            const sections = [];
+            if (clients.length > 0) {
+                sections.push(`<div class="search-section-title"><i class="fas fa-users"></i> عملاء (${clients.length})</div>`);
+                clients.slice(0, 5).forEach(c => {
+                    sections.push(`<div class="search-result" onclick="goToRecord('clients','${c.id}')">
+                        <div class="name">${c.name}</div>
+                        <div class="detail">${c.email || ''} ${c.phone ? '· ' + c.phone : ''}</div>
+                    </div>`);
+                });
+            }
+            if (invoices.length > 0) {
+                sections.push(`<div class="search-section-title"><i class="fas fa-file-invoice"></i> فواتير (${invoices.length})</div>`);
+                invoices.slice(0, 5).forEach(inv => {
+                    const cl = db.clients.find(x => x.id == inv.clientId);
+                    sections.push(`<div class="search-result" onclick="goToRecord('invoices','${inv.id}')">
+                        <div class="name">INV-${String(inv.id).substring(0, 8)} · ${cl ? cl.name : '-'}</div>
+                        <div class="detail">${(inv.description || inv.reference || '-').substring(0, 60)} · ${(Number(inv.amount)||0).toFixed(2)} ر.س</div>
+                    </div>`);
+                });
+            }
+            if (cases.length > 0) {
+                sections.push(`<div class="search-section-title"><i class="fas fa-gavel"></i> قضايا (${cases.length})</div>`);
+                cases.slice(0, 5).forEach(c => {
+                    sections.push(`<div class="search-result" onclick="goToRecord('cases','${c.id}')">
+                        <div class="name">${c.title}</div>
+                        <div class="detail">${c.party1} ضد ${c.party2}</div>
+                    </div>`);
+                });
+            }
+            if (settlements.length > 0) {
+                sections.push(`<div class="search-section-title"><i class="fas fa-file-contract"></i> مخالصات (${settlements.length})</div>`);
+                settlements.slice(0, 5).forEach(s => {
+                    const cl = db.clients.find(x => x.id == s.clientId);
+                    sections.push(`<div class="search-result" onclick="goToRecord('settlements','${s.id}')">
+                        <div class="name">SETL-${String(s.id).substring(0, 8)} · ${cl ? cl.name : '-'}</div>
+                        <div class="detail">${(s.notes || '').substring(0, 70)}</div>
+                    </div>`);
+                });
+            }
+
+            if (sections.length === 0) {
+                dd.innerHTML = `<div class="search-empty"><i class="fas fa-search" style="font-size:24px;color:#ddd;display:block;margin-bottom:8px;"></i>لا توجد نتائج لـ "${q}"</div>`;
+            } else {
+                dd.innerHTML = sections.join('');
+            }
+            dd.classList.add('show');
+        }
+
+        function goToRecord(section, id) {
+            // Navigate to the section
+            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.nav-link').forEach(a => a.classList.remove('active'));
+            const target = document.getElementById(section);
+            if (target) target.classList.add('active');
+            const reloaders = {
+                clients: () => loadClients(),
+                invoices: () => loadInvoices(),
+                cases: () => loadCases(),
+                settlements: () => loadSettlements()
+            };
+            if (reloaders[section]) reloaders[section]();
+            // Close search dropdown and clear box
+            const dd = document.getElementById('searchDropdown');
+            if (dd) dd.classList.remove('show');
+            const box = document.getElementById('searchBox');
+            if (box) box.value = '';
+        }
+
+        // Close search dropdown when clicking outside
+        document.addEventListener('click', function(e) {
+            const dd = document.getElementById('searchDropdown');
+            const box = document.getElementById('searchBox');
+            if (!dd || !box) return;
+            if (!box.contains(e.target) && !dd.contains(e.target)) {
+                dd.classList.remove('show');
+            }
+        });
+
+        // ========================================
+        // PDF Export (uses html2pdf already loaded)
+        // ========================================
+        function exportInvoicePDF(invoiceId) {
+            const inv = db.invoices.find(i => i.id == invoiceId);
+            if (!inv) return alert('الفاتورة غير موجودة');
+            const client = db.clients.find(c => c.id == inv.clientId) || {};
+            const counter = db.clients.find(c => c.id == inv.counterpartyClientId);
+            const amount = Number(inv.amount) || 0;
+            const paid = Number(inv.paid) || 0;
+            const remaining = amount - paid;
+            const docId = 'INV-' + String(inv.id).substring(0, 8);
+            const html = `<div style="max-width:780px;margin:0 auto;padding:30px;background:white;font-family:'Segoe UI',Arial,sans-serif;color:#222;">
+                <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:18px;border-bottom:3px solid #1a4d2e;">
+                    <div><div style="font-size:28px;font-weight:bold;color:#1a4d2e;">نظام 1000 عين</div><div style="font-size:12px;color:#666;margin-top:4px;">منصة إدارة الحسابات والمخالصات</div></div>
+                    <div style="text-align:left;"><div style="font-size:22px;font-weight:bold;color:#d4af37;">فاتورة</div><div style="font-size:13px;color:#666;margin-top:4px;">${docId}</div></div>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:25px;">
+                    <div style="padding:14px;background:#f7f7f7;border-radius:8px;"><div style="font-size:11px;color:#888;margin-bottom:6px;">العميل</div><div style="font-weight:bold;font-size:15px;color:#1a4d2e;">${client.name || '-'}</div><div style="font-size:12px;color:#555;margin-top:3px;">${client.email || ''}</div><div style="font-size:12px;color:#555;">${client.phone || ''}</div></div>
+                    ${counter ? `<div style="padding:14px;background:#f7f7f7;border-radius:8px;"><div style="font-size:11px;color:#888;margin-bottom:6px;">الخصم (الطرف الآخر)</div><div style="font-weight:bold;font-size:15px;color:#1a4d2e;">${counter.name || '-'}</div><div style="font-size:12px;color:#555;margin-top:3px;">${counter.email || ''}</div><div style="font-size:12px;color:#555;">${counter.phone || ''}</div></div>` : '<div></div>'}
+                </div>
+                <table style="width:100%;border-collapse:collapse;margin-top:25px;">
+                    <thead><tr style="background:#1a4d2e;color:white;"><th style="padding:12px;text-align:right;font-size:13px;">البيان</th><th style="padding:12px;text-align:right;font-size:13px;">المرجع</th><th style="padding:12px;text-align:right;font-size:13px;">التاريخ</th><th style="padding:12px;text-align:left;font-size:13px;">المبلغ</th></tr></thead>
+                    <tbody><tr><td style="padding:12px;border-bottom:1px solid #eee;font-size:13px;">${inv.description || '-'}</td><td style="padding:12px;border-bottom:1px solid #eee;font-size:13px;">${inv.reference || '-'}</td><td style="padding:12px;border-bottom:1px solid #eee;font-size:13px;">${inv.date || '-'}</td><td style="padding:12px;border-bottom:1px solid #eee;text-align:left;font-size:13px;font-weight:bold;">${amount.toFixed(2)} ر.س</td></tr></tbody>
+                </table>
+                <div style="margin-top:25px;display:flex;justify-content:flex-end;">
+                    <table style="border-collapse:collapse;min-width:280px;">
+                        <tr><td style="padding:8px 16px;border-bottom:1px solid #eee;font-size:13px;color:#666;">إجمالي المبلغ:</td><td style="padding:8px 16px;border-bottom:1px solid #eee;text-align:left;font-size:13px;font-weight:bold;">${amount.toFixed(2)} ر.س</td></tr>
+                        <tr><td style="padding:8px 16px;border-bottom:1px solid #eee;font-size:13px;color:#10b981;">المدفوع:</td><td style="padding:8px 16px;border-bottom:1px solid #eee;text-align:left;font-size:13px;font-weight:bold;color:#10b981;">${paid.toFixed(2)} ر.س</td></tr>
+                        <tr style="background:${remaining > 0 ? '#fee2e2' : '#d1fae5'};"><td style="padding:12px 16px;font-size:15px;font-weight:bold;color:${remaining > 0 ? '#dc2626' : '#065f46'};">${remaining > 0 ? 'المتبقي:' : 'مسددة بالكامل'}</td><td style="padding:12px 16px;text-align:left;font-size:15px;font-weight:bold;color:${remaining > 0 ? '#dc2626' : '#065f46'};">${remaining.toFixed(2)} ر.س</td></tr>
+                    </table>
+                </div>
+                <div style="margin-top:30px;padding:14px;background:#fffbf0;border-right:4px solid #d4af37;border-radius:6px;"><div style="font-size:11px;color:#888;margin-bottom:4px;">الحالة</div><div style="font-weight:bold;font-size:14px;color:#1a4d2e;">${inv.status || '-'}</div></div>
+                ${inv.sourceFile ? `<div style="margin-top:15px;font-size:11px;color:#888;">📎 ملف المصدر: ${inv.sourceFile}</div>` : ''}
+                <div style="margin-top:60px;padding-top:20px;border-top:2px solid #eee;display:flex;justify-content:space-between;font-size:11px;color:#888;"><div>📅 تاريخ الإنشاء: ${new Date().toLocaleDateString('ar-SA')}</div><div>نظام 1000 عين © ${new Date().getFullYear()}</div></div>
+            </div>`;
+            exportToPDF(html, `${docId}.pdf`);
+        }
+
+        function exportSettlementPDF(settlementId) {
+            const s = db.settlements.find(x => x.id == settlementId);
+            if (!s) return alert('المخالصة غير موجودة');
+            const client = db.clients.find(c => c.id == s.clientId) || {};
+            const total = Number(s.total) || 0;
+            const paid = Number(s.paid) || 0;
+            const remaining = Number(s.remaining) || (total - paid);
+            const docId = 'SETL-' + String(s.id).substring(0, 8);
+            const html = `<div style="max-width:780px;margin:0 auto;padding:30px;background:white;font-family:'Segoe UI',Arial,sans-serif;color:#222;">
+                <div style="text-align:center;padding-bottom:18px;border-bottom:3px solid #1a4d2e;"><div style="font-size:28px;font-weight:bold;color:#1a4d2e;">إقرار مخالصة</div><div style="font-size:13px;color:#666;margin-top:6px;">${docId}</div></div>
+                <div style="margin-top:30px;font-size:14px;line-height:1.9;">
+                    <p>أُقرّ أنا <strong style="color:#1a4d2e;">${client.name || '-'}</strong>${client.phone ? ` (رقم الهاتف: <strong>${client.phone}</strong>)` : ''}،</p>
+                    <p>بأنّ ذمتي المالية الإجمالية تبلغ مبلغاً قدره: <strong style="font-size:16px;color:#1a4d2e;">${total.toFixed(2)} ريال سعودي</strong></p>
+                    <p>وقد تم سداد مبلغ: <strong style="font-size:16px;color:#10b981;">${paid.toFixed(2)} ريال سعودي</strong></p>
+                    <p>والرصيد المتبقي: <strong style="font-size:16px;color:${remaining > 0 ? '#dc2626' : '#065f46'};">${remaining.toFixed(2)} ريال سعودي</strong></p>
+                </div>
+                <div style="margin-top:25px;padding:18px;background:#fffbf0;border-right:4px solid #d4af37;border-radius:6px;"><div style="font-size:11px;color:#888;margin-bottom:8px;">الملاحظات</div><div style="font-size:13px;line-height:1.7;white-space:pre-wrap;">${s.notes || '-'}</div></div>
+                <div style="margin-top:25px;display:flex;justify-content:space-between;font-size:13px;"><div><strong>التاريخ:</strong> ${s.date || '-'}</div><div><strong>الحالة:</strong> <span style="padding:3px 10px;background:${s.status === 'مسدد' ? '#d1fae5' : '#fef3c7'};color:${s.status === 'مسدد' ? '#065f46' : '#92400e'};border-radius:14px;font-size:12px;">${s.status || '-'}</span></div></div>
+                <div style="margin-top:80px;display:grid;grid-template-columns:1fr 1fr;gap:40px;text-align:center;"><div><div style="border-top:1px solid #999;padding-top:8px;font-size:13px;">توقيع المُقرّ</div></div><div><div style="border-top:1px solid #999;padding-top:8px;font-size:13px;">توقيع المسؤول</div></div></div>
+                <div style="margin-top:60px;padding-top:15px;border-top:2px solid #eee;text-align:center;font-size:11px;color:#888;">نظام 1000 عين · ${new Date().toLocaleDateString('ar-SA')}</div>
+            </div>`;
+            exportToPDF(html, `${docId}.pdf`);
+        }
+
+        function exportToPDF(htmlContent, filename) {
+            if (typeof html2pdf === 'undefined') {
+                alert('مكتبة PDF غير محمّلة');
+                return;
+            }
+            const wrapper = document.createElement('div');
+            wrapper.style.direction = 'rtl';
+            wrapper.style.fontFamily = 'Arial, sans-serif';
+            wrapper.style.padding = '20px';
+            wrapper.style.color = '#333';
+            wrapper.innerHTML = htmlContent;
+            document.body.appendChild(wrapper);
+            const opt = {
+                margin: 10,
+                filename: filename || 'document.pdf',
+                image: { type: 'jpeg', quality: 0.95 },
+                html2canvas: { scale: 2, useCORS: true },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+            html2pdf().set(opt).from(wrapper).save().then(() => {
+                document.body.removeChild(wrapper);
+            }).catch(err => {
+                console.error('PDF error:', err);
+                document.body.removeChild(wrapper);
+                alert('فشل توليد PDF: ' + err.message);
+            });
+        }
+
         function showAlert(elementId, message) {
             const alert = document.getElementById(elementId);
             alert.innerHTML = `<i class="fas fa-check-circle"></i> <span>${message}</span>`;
@@ -3287,6 +4197,7 @@
                 : (document.getElementById('statementCounterparty')?.value || '');
 
             setStatementStatus('<i class="fas fa-spinner fa-spin"></i> جاري قراءة الملف...');
+            showLoading('جاري قراءة وتحليل الملف...');
 
             try {
                 const ext = (file.name.split('.').pop() || '').toLowerCase();
@@ -3314,6 +4225,8 @@
                 showStatementPreview();
             } catch (err) {
                 setStatementStatus('خطأ: ' + err.message, true);
+            } finally {
+                hideLoading();
             }
         }
 
@@ -3547,6 +4460,7 @@
                 return;
             }
             const { rows, clientId, counterpartyId, fileName } = pendingStatement;
+            showLoading(`جاري حفظ ${rows.length} سطر...`);
             try {
                 // Save in chunks of 400 (Firestore batch limit is 500)
                 const CHUNK = 400;
@@ -3583,6 +4497,8 @@
                 pendingStatement = null;
             } catch (err) {
                 alert('خطأ في الحفظ: ' + err.message);
+            } finally {
+                hideLoading();
             }
         }
 
@@ -3596,7 +4512,6 @@
             let items = filterMine(db.invoices, ['clientId', 'counterpartyClientId'])
                 .filter(i => i.sourceFile);
 
-            // Apply search filter
             const searchEl = document.getElementById('statementSearch');
             const q = searchEl ? searchEl.value.trim().toLowerCase() : '';
             if (q) {
@@ -3607,10 +4522,21 @@
                 );
             }
 
-            // Sort by date desc
+            // Sort by date desc by default
             items.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
-            items.forEach(inv => {
+            const total = items.length;
+            const { items: pageItems, totalPages } = applyPagination(items, 'statementsTable');
+
+            if (pageItems.length === 0) {
+                renderEmptyState(tbody, 10, q ? 'لا توجد نتائج للبحث.' : 'لا توجد كشوفات مرفوعة. ارفع كشف Excel أو PDF للبدء.', 'fa-file-import');
+                renderPagination('statementsTable', totalPages, total);
+                const sE = document.getElementById('statementsCount');
+                if (sE) sE.textContent = total;
+                return;
+            }
+
+            pageItems.forEach(inv => {
                 const client = db.clients.find(c => c.id == inv.clientId);
                 const counter = db.clients.find(c => c.id == inv.counterpartyClientId);
                 const amount = Number(inv.amount) || 0;
@@ -3635,8 +4561,9 @@
                 `;
             });
 
+            renderPagination('statementsTable', totalPages, total);
             const countEl = document.getElementById('statementsCount');
-            if (countEl) countEl.textContent = items.length;
+            if (countEl) countEl.textContent = total;
         }
 
         function filterStatementsTable() {
